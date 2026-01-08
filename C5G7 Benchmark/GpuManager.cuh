@@ -11,7 +11,7 @@ class GPU_Manager {
 public:
 
 	// double pointer needed - or put MatXS*& d_ptr. I kept the double pointer so that it stays safe with CUDA style codes. 
-	H static void C5G7DeviceAllocater(MatXS** d_ptr, MatXS& h_instance) {
+	H static void C5G7DeviceAllocater(XSLibrary** d_ptr, XSLibrary& h_instance) {
 		cudaMalloc(d_ptr, sizeof(h_instance));
 		cudaMemcpy(*d_ptr, &h_instance, sizeof(h_instance), cudaMemcpyHostToDevice);
 	}

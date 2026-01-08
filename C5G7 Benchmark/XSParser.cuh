@@ -29,7 +29,7 @@ static inline std::vector<double> parse_double_from_line(const std::string& line
 }
 
 
-struct G7 {
+struct MatXS {
 	MatType matType{};
 	double totalXS[7]{};
 	double transXS[7]{};
@@ -42,10 +42,10 @@ struct G7 {
 	double elsXS[7][7]{};
 
 	// Default constructor
-	H G7() = default;
-	H G7(MatType matType) : matType(matType) {}
+	H MatXS() = default;
+	H MatXS(MatType matType) : matType(matType) {}
 
-	H G7(std::string fileName, MatType matType)
+	H MatXS(std::string fileName, MatType matType)
 		: matType(matType)
 	{
 		std::ifstream C5Data(fileName);
@@ -109,27 +109,27 @@ struct G7 {
 		}
 	}
 
-	H void g7DeviceAllocator(G7*& d_G7);
+	H void g7DeviceAllocator(MatXS*& d_G7);
 
 };
 
 
-class MatXS {
+class XSLibrary {
 
 public:
-	G7 UO2{ MatType::UO2 };
-	G7 MOX4_3{ MatType::MOX4_3 };
-	G7 MOX7_0{ MatType::MOX7_0 };
-	G7 MOX8_7{ MatType::MOX8_7 };
-	G7 GT{ MatType::GT };
-	G7 FC{ MatType::FC };
-	G7 MOD{ MatType::MOD };
+	MatXS UO2{ MatType::UO2 };
+	MatXS MOX4_3{ MatType::MOX4_3 };
+	MatXS MOX7_0{ MatType::MOX7_0 };
+	MatXS MOX8_7{ MatType::MOX8_7 };
+	MatXS GT{ MatType::GT };
+	MatXS FC{ MatType::FC };
+	MatXS MOD{ MatType::MOD };
 
-	MatXS() = default;
+	XSLibrary() = default;
 
 
 	// reference return needed - see the initialize of the MatXSFactory. It requires a reference return.
-	HD G7& returnMatByType(MatType matType) {
+	HD MatXS& returnMatByType(MatType matType) {
 		switch (matType) {
 		case MatType::UO2:		return UO2;
 		case MatType::MOX4_3:	return MOX4_3;
@@ -163,15 +163,15 @@ public:
 class MatXSFactory {
 
 public:
-	MatXS matXS;
+	XSLibrary matXS;
 
-	H static void initialize(MatXS& matXS, std::vector<G7>& matXS_vec) {
-		for (G7& XS : matXS_vec) {
+	H static void initialize(XSLibrary& matXS, std::vector<MatXS>& matXS_vec) {
+		for (MatXS& XS : matXS_vec) {
 			matXS.returnMatByType(XS.matType) = XS;
 		}
 	}
 
-	H static void initialize(std::vector<G7>& matXS_vec) {
+	H static void initialize(std::vector<MatXS>& matXS_vec) {
 		
 	}
 

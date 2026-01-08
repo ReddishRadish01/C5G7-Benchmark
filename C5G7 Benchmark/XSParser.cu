@@ -2,10 +2,10 @@
 #include "XSParser.cuh"
 
 
-H void G7::g7DeviceAllocator(G7*& d_G7) {
+H void MatXS::g7DeviceAllocator(MatXS*& d_G7) {
 	
-	cudaMalloc(&d_G7, sizeof(G7));
-	cudaMemcpy(d_G7, this, sizeof(G7), cudaMemcpyHostToDevice);
+	cudaMalloc(&d_G7, sizeof(MatXS));
+	cudaMemcpy(d_G7, this, sizeof(MatXS), cudaMemcpyHostToDevice);
 
 	/*
 

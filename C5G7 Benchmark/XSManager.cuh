@@ -10,7 +10,7 @@
 // this is for finding XS from corresponding location
 class XSManager {
 public:
-	HD static double returnXSByMat(MatType matType, MatXS& matXS, InteractionType interactionType, double in, double out = 0.0) {
+	HD static double returnXSByMat(MatType matType, XSLibrary& matXS, InteractionType interactionType, double in, double out = 0.0) {
 		//in = static_cast<int>(in);
 		//out = static_cast<int>(out);
 		switch(interactionType) {

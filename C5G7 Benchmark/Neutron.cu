@@ -80,6 +80,7 @@ __host__ __device__ void Neutron::Nullify() {
 	this->energy = 0.0;
 	this->status = false;
 	this->passFlag = true;
+	this->weight = 0.0;
 }
 
 __host__ __device__ void Neutron::reInitialize(vec3 pos, vec3 dirVec, double energy, double weight) {
