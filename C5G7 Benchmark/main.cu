@@ -15,7 +15,7 @@
 G void GPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* bank) {
 	int idx = threadIdx.x + blockIdx.x * blockDim.x;
 	if (idx < num) {
-		//printf("Cross Section: %f\n", d_MatXS->UO2.totalXS[1]);
+		printf("Cross Section: %.9f\n", d_MatXS->UO2.transXS[0]);
 		Neutron localNeutron = bank->neutrons[idx];
 		//MatType meatType = Core->returnAssemblyByPos(bank->neutrons[idx]).returnPincellByPos(bank->neutrons[idx]).meatType;
 		MatType meatType = CoreManager::returnPincellByPos(Core, localNeutron).meatType;
