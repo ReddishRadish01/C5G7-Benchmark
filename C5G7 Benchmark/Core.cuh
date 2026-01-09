@@ -9,7 +9,7 @@
 class Pincell {
 public:
 	double sideLength = 1.26;	// 1.26 cm. alias with height
-	double cellHeight = 1.26;
+	double height = 1.26;
 	double radius = 0.54;	// 0.54 cm radius
 	MatType meatType = MatType::Unknown;
 	MatType modType = MatType::MOD;
@@ -18,23 +18,27 @@ public:
 	H Pincell() = default;
 
 	H Pincell(double sideLength, double radius, double height = 0.0, MatType meat = MatType::Unknown, MatType mod = MatType::MOD, vec2 centerOffset = { 0.0, 0.0 })
-		: sideLength(sideLength), radius(radius), cellHeight(height), meatType(meat), modType(mod), centerOffset(centerOffset)
+		: sideLength(sideLength), radius(radius), height(height), meatType(meat), modType(mod), centerOffset(centerOffset)
 	{
 		// exceptions: if radius is bigger than sideLength / 2 ? remove it
 		if (2 * radius > sideLength) { radius = sideLength / 2.0; }
 	}
 
-	HD MatType meatOrMod(vec3 flooredPos) {
+	HD MatType meatOrMod(vec3 pincellLocalPos) {
 		// this is for moderator block
-		if (radius == 0.0) { return modType;  }
+		if (radius == 0.0) { return modType; }
 
 		// rest is for regular pincell
 		vec2 center = { this->sideLength / 2.0 + centerOffset.x, this->sideLength / 2.0 + centerOffset.y };
-		if ((flooredPos.x - center.x) * (flooredPos.x - center.x) + (flooredPos.y - center.y) * (flooredPos.y - center.y) > (radius * radius))
+		if ((pincellLocalPos.x - center.x) * (pincellLocalPos.x - center.x) + (pincellLocalPos.y - center.y) * (pincellLocalPos.y - center.y) > (radius * radius))
 			return modType;
 		else 
 			return meatType;
 	}
+
+
+	HD double DTC(vec3 localPos, Neutron& n, XSLibrary& XSLib, unsigned long long xi);
+	HD double DTS(vec3 localPos, Neutron& n);
 };
 
 class Assembly {
@@ -107,9 +111,13 @@ public:
 			height = cellHeight;
 		}
 
-		this->xNum = static_cast<int>(length.x / cellSize);
-		this->yNum = static_cast<int>(length.y / cellSize);
-		this->zNum = static_cast<int>(length.z / height);
+		this->startPos = startPos;
+		this->length = length;
+
+		this->xNum = static_cast<int>(length.x + 1.0e-9 / cellSize);
+		this->yNum = static_cast<int>(length.y + 1.0e-9 / cellSize);
+		this->zNum = static_cast<int>((length.z + 1.0e-9) / height);
+		// fuck this floating point shits - the length.z is not enough - 
 
 		int numPincells = this->xNum * this->yNum * this->zNum;
 		this->pinCells = new Pincell[numPincells];
@@ -127,8 +135,10 @@ public:
 	HD Pincell& returnPincellByIndex(int x, int y, int z);
 
 	HD int totalPincellNo();
-
 	HD Pincell& returnPincellByPos(Neutron n);
+	HD vec3 returnFlooredNeutronPosInPincell(Neutron& n);
+	HD double DTC(Neutron& n, XSLibrary& XSLib, unsigned long long xi);
+	HD double DTS(Neutron& n);
 };
 
 class C5G7Geometry {
@@ -175,8 +185,9 @@ public:
 		// this usually means fucked up - 
 		// we are never meant to pass the out-of-bounds neutrons, or nullified neutrons in this function.
 		// we never want the code to flow into this far, in this function - idK why it ended up here, maybe put some debugger outputs just in case
-		n.Nullify();
+		
 		printf("Neutron Out-Of-Bounds in Position: (%f, %f, %f)\n", n.pos.x, n.pos.y, n.pos.z);
+		n.Nullify();
 		// return null assembly 
 		return this->nullAssembly;
 	}
@@ -279,7 +290,7 @@ public:
 
 		std::copy(assemblyVec.begin(), assemblyVec.end(), Core.assembly);
 
-		Core.assemblyNo = assemblyVec.size();
+		Core.assemblyNo = static_cast<int>(assemblyVec.size());
 
 		totalCore.close();
 	}

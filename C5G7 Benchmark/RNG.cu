@@ -61,6 +61,7 @@ __host__ __device__ double GnuAMCM::uniform_open(double lowerLimit, double upper
 	return lowerLimit + (upperLimit - lowerLimit) * u;
 }
 
+// includes lower and upper.
 __host__ __device__ int GnuAMCM::int_dist(int lower, int upper) {
 	//unsigned long long xi_nplus1 = (m_xi * 2521490317ULL + 11ULL) % (1ULL << 48);
 	//m_xi = xi_nplus1;

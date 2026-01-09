@@ -87,6 +87,7 @@
     <CudaCompile Include="Neutron.cu" />
     <CudaCompile Include="Core.cu" />
     <CudaCompile Include="RNG.cu" />
+    <CudaCompile Include="Tally.cu" />
     <CudaCompile Include="XSParser.cu" />
   </ItemGroup>
   <ItemGroup>
@@ -96,9 +97,11 @@
     <ClInclude Include="Core.cuh" />
     <ClInclude Include="Debug.cuh" />
     <ClInclude Include="GpuManager.cuh" />
+    <ClInclude Include="Interaction.cuh" />
     <ClInclude Include="Neutron.cuh" />
     <ClInclude Include="NeutronBankManager.cuh" />
     <ClInclude Include="RNG.cuh" />
+    <ClInclude Include="Tally.cuh" />
     <ClInclude Include="XSManager.cuh" />
     <ClInclude Include="XSParser.cuh" />
   </ItemGroup>

@@ -2,6 +2,8 @@
 #include "XSParser.cuh"
 
 
+
+
 H void MatXS::g7DeviceAllocator(MatXS*& d_G7) {
 	
 	cudaMalloc(&d_G7, sizeof(MatXS));

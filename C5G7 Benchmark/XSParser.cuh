@@ -19,8 +19,22 @@ enum class MatType {
 	Unknown
 };
 
+HD static inline const char* to_string(MatType t) {
+	switch (t) {
+	case MatType::UO2:    return "UO2";
+	case MatType::MOX4_3: return "MOX4_3";
+	case MatType::MOX7_0: return "MOX7_0";
+	case MatType::MOX8_7: return "MOX8_7";
+	case MatType::GT:     return "GT";
+	case MatType::FC:     return "FC";
+	case MatType::MOD:    return "MOD";
+	case MatType::Unknown: return "UNKNWON";
+	default:              return "UNKNOWN";
+	}
+}
 
-static inline std::vector<double> parse_double_from_line(const std::string& line) {
+
+H static inline std::vector<double> parse_double_from_line(const std::string& line) {
 	std::istringstream iss(line);
 	std::vector<double> v;
 	double x;
@@ -93,6 +107,8 @@ struct MatXS {
 
 			}
 		}
+
+		//this below is to compensate for 10^{-5} degress of bias in transXS compared when every other XS is added up.
 		
 	}
 
@@ -142,23 +158,9 @@ public:
 		}
 	}
 
-	/*
-	// separated device proprietary codes
-	D G7 returnMatByType(MatType matType) const {
-		switch (matType) {
-		case MatType::UO2:		return UO2;
-		case MatType::MOX4_3:	return MOX4_3;
-		case MatType::MOX7_0:	return MOX7_0;
-		case MatType::MOX8_7:	return MOX8_7;
-		case MatType::FC:		return FC;
-		case MatType::GT:		return GT;
-		case MatType::MOD:		return MOD;
-		default:				return MOD;
-		}
-	}
-	*/
 	
 };
+
 
 class MatXSFactory {
 

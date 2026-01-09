@@ -1,0 +1,11 @@
+#include "cudaHeader.cuh"
+#include "XSParser.cuh"
+#include "Neutron.cuh"
+#include "Core.cuh"
+#include "GpuManager.cuh"
+#include "CoreManager.cuh"
+#include "XSManager.cuh"
+#include "NeutronBankManager.cuh"
+#include "Debug.cuh"
+
+#include "Tally.cuh"

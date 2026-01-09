@@ -18,5 +18,8 @@ public:
 	// More: if the d_ptr is passed by MatXS* d_ptr, it is passed as value - it doesn't actually change the value(the address) of d_ptr.
 	// thus, you need to pass it as the pointer to pointer (MatXS**), or the reference to pointer (MatXS*&)
 
+	
+
+	//H static void 
 
 };
