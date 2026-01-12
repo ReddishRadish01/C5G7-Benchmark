@@ -49,11 +49,13 @@ struct GnuAMCM {
 		this->m_xi = xi_nplus1;
 	}
 
-	__host__ __device__
-		__host__ __device__ double uniform(double lowerLimit, double upperLimit);
+	
+	__host__ __device__ double uniform(double lowerLimit, double upperLimit);
 	__host__ __device__ double uniform_open(double lowerLimit, double upperLimit);
 	__host__ __device__ double uniform_right_closed(double lowerLimit, double upperLimit);
 	__host__ __device__ double uniform_left_closed(double lowerLimit, double upperLimit);
+
+	// closed - includes lower and upper
 	__host__ __device__ int int_dist(int lower, int upper);
 
 	__host__ __device__ double MaxwellDistSample(double a);

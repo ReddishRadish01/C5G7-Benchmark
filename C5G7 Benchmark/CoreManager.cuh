@@ -19,7 +19,7 @@ public:
 	}
 
 	HD inline static Pincell returnPincellByPos(C5G7Geometry* core, Neutron n) {
-		return core->returnAssemblyByPos(n).returnPincellByPos(n);
+ 		return core->returnAssemblyByPos(n).returnPincellByPos(n);
 	}
 
 };

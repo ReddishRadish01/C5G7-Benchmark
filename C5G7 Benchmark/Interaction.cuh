@@ -10,7 +10,7 @@
 
 class Interaction {
 public:
-	HD static InteractionType returnInteraction(Pincell pincell, Neutron n, XSLibrary XSLib, unsigned long long xi) {
+	HD static InteractionType returnInteraction(Pincell pincell, Neutron n, XSLibrary& XSLib, unsigned long long xi) {
 
 
 		GnuAMCM RNG(xi);

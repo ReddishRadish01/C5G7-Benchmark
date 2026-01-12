@@ -37,7 +37,7 @@ public:
 	}
 
 
-	HD double DTC(vec3 localPos, Neutron& n, XSLibrary& XSLib, unsigned long long xi);
+	HD double DTC(vec3 localPos, Neutron& n, XSLibrary* XSLib, unsigned long long xi);
 	HD double DTS(vec3 localPos, Neutron& n);
 };
 
@@ -114,8 +114,8 @@ public:
 		this->startPos = startPos;
 		this->length = length;
 
-		this->xNum = static_cast<int>(length.x + 1.0e-9 / cellSize);
-		this->yNum = static_cast<int>(length.y + 1.0e-9 / cellSize);
+		this->xNum = static_cast<int>((length.x + 1.0e-9) / cellSize);
+		this->yNum = static_cast<int>((length.y + 1.0e-9) / cellSize);
 		this->zNum = static_cast<int>((length.z + 1.0e-9) / height);
 		// fuck this floating point shits - the length.z is not enough - 
 
@@ -137,7 +137,7 @@ public:
 	HD int totalPincellNo();
 	HD Pincell& returnPincellByPos(Neutron n);
 	HD vec3 returnFlooredNeutronPosInPincell(Neutron& n);
-	HD double DTC(Neutron& n, XSLibrary& XSLib, unsigned long long xi);
+	HD double DTC(Neutron& n, XSLibrary* XSLib, unsigned long long xi);
 	HD double DTS(Neutron& n);
 };
 
@@ -185,7 +185,6 @@ public:
 		// this usually means fucked up - 
 		// we are never meant to pass the out-of-bounds neutrons, or nullified neutrons in this function.
 		// we never want the code to flow into this far, in this function - idK why it ended up here, maybe put some debugger outputs just in case
-		
 		printf("Neutron Out-Of-Bounds in Position: (%f, %f, %f)\n", n.pos.x, n.pos.y, n.pos.z);
 		n.Nullify();
 		// return null assembly 

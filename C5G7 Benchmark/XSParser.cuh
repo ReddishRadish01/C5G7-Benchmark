@@ -111,6 +111,8 @@ struct MatXS {
 		
 		// this below is to compensate for 10^{-5} degress of bias in transXS compared when every other XS is added up.
 		// we force the transXS to be the sum of other XS.
+		//if 
+
 		for (int g = 0; g < 7; g++) {
 			transXS[g] = capXS[g] + fisXS[g];
 			for (int i = 0; i < 7; i++) {
@@ -121,16 +123,16 @@ struct MatXS {
 		
 	}
 
-	HD double returnXSbyType(XSType xsType, double currentEnergy, double destination = 0) const {
+	HD double returnXSbyType(XSType xsType, double currentEnergy, double destination = 1.0) const {
 		switch (xsType) {
-		case XSType::tot:		return this->totalXS[static_cast<int>(currentEnergy)];
-		case XSType::trans:		return this->transXS[static_cast<int>(currentEnergy)];
-		case XSType::abs:		return this->absXS[static_cast<int>(currentEnergy)];
-		case XSType::cap:		return this->capXS[static_cast<int>(currentEnergy)];
-		case XSType::fis:		return this->fisXS[static_cast<int>(currentEnergy)];
-		case XSType::nu:		return this->nu[static_cast<int>(currentEnergy)];
-		case XSType::chi:		return this->chi[static_cast<int>(currentEnergy)];
-		case XSType::el:		return this->elsXS[static_cast<int>(currentEnergy)][static_cast<int>(destination)];
+		case XSType::tot:		return this->totalXS[static_cast<int>(currentEnergy)-1];
+		case XSType::trans:		return this->transXS[static_cast<int>(currentEnergy)-1];
+		case XSType::abs:		return this->absXS[static_cast<int>(currentEnergy)-1];
+		case XSType::cap:		return this->capXS[static_cast<int>(currentEnergy)-1];
+		case XSType::fis:		return this->fisXS[static_cast<int>(currentEnergy)-1];
+		case XSType::nu:		return this->nu[static_cast<int>(currentEnergy)-1];
+		case XSType::chi:		return this->chi[static_cast<int>(currentEnergy)-1];
+		case XSType::el:		return this->elsXS[static_cast<int>(currentEnergy)-1][static_cast<int>(destination)-1];
 		}
 	}
 
@@ -174,11 +176,11 @@ public:
 class MatXSFactory {
 
 public:
-	XSLibrary matXS;
+	XSLibrary XSLib;
 
-	H static void initialize(XSLibrary& matXS, std::vector<MatXS>& matXS_vec) {
+	H static void initialize(XSLibrary& XSLib, std::vector<MatXS>& matXS_vec) {
 		for (MatXS& XS : matXS_vec) {
-			matXS.returnMatByType(XS.matType) = XS;
+			XSLib.returnMatByType(XS.matType) = XS;
 		}
 	}
 

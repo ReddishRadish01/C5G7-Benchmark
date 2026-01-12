@@ -12,24 +12,57 @@
 
 
 
-G void GPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* bank) {
+G void GPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* bank, unsigned long long* seedArr) {
 	int idx = threadIdx.x + blockIdx.x * blockDim.x;
 	if (idx < num) {
-		printf("Cross Section: %.9f\n", d_MatXS->UO2.transXS[0]);
+		//printf("Cross Section: %.9f\n", d_MatXS->UO2.transXS[0]);
 		Neutron localNeutron = bank->neutrons[idx];
+		unsigned long long localSeed = seedArr[idx];
+
 		//MatType meatType = Core->returnAssemblyByPos(bank->neutrons[idx]).returnPincellByPos(bank->neutrons[idx]).meatType;
-		MatType meatType = CoreManager::returnPincellByPos(Core, localNeutron).meatType;
-		printf("idx: %d, Material type : %s\t at Neutron Pos (%2.3f, %2.3f, %2.3f)\n", idx, to_string(meatType), localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z);
+		Pincell currentPincell = CoreManager::returnPincellByPos(Core, localNeutron);
+		Assembly currentAssembly = Core->returnAssemblyByPos(localNeutron);
+		vec3 floorNeutronPos = currentAssembly.returnFlooredNeutronPosInPincell(localNeutron);
+		Pincell thisPincell = currentAssembly.returnPincellByPos(localNeutron);
+		double DTC = currentAssembly.DTC(localNeutron, d_MatXS, localSeed);
+		double DTS = currentAssembly.DTS(localNeutron);
+		MatType meatType = currentPincell.meatType;
+		MatType modType = currentPincell.modType;
+
+		MatType currentType = currentPincell.meatOrMod(floorNeutronPos);
+		//printf("idx: %d, Material type : %s\t at Neutron Pos (%2.3f, %2.3f, %2.3f), DTC:%2.5f \n", idx, to_string(meatType), localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z, DTC);
+		//printf("idx: %d, pin type: %s, current material: %s, DTC: %f, TransXS: %f\n", idx, to_string(meatType), to_string(currentType), DTC, d_MatXS->returnMatByType(currentType).transXS[static_cast<int>(localNeutron.energy) - 1]);
+
+		printf("idx: %d, pin type: %s, current material: %s, N Pos (%f, %f, %f), floor Neutron Pos (%2.3f, %2.3f, %2.3f), dirVec: (%f, %f, %f) DTC: %f, DTS: %f\n", idx, to_string(meatType), to_string(currentType),
+			localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z, floorNeutronPos.x, floorNeutronPos.y, floorNeutronPos.z,
+			localNeutron.dirVec.x, localNeutron.dirVec.y, localNeutron.dirVec.z, DTC, DTS
+		);
 	}
 }
 
-H void CPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* bank) {
+H void CPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* bank, unsigned long long* seedArr) {
 	for(int idx = 0; idx < num; idx++) {
-		//printf("Cross Section: %f\n", d_MatXS->UO2.totalXS[1]);
 		Neutron localNeutron = bank->neutrons[idx];
+		unsigned long long localSeed = seedArr[idx];
+
 		//MatType meatType = Core->returnAssemblyByPos(bank->neutrons[idx]).returnPincellByPos(bank->neutrons[idx]).meatType;
-		MatType meatType = CoreManager::returnPincellByPos(Core, localNeutron).meatType;
-		printf("idx: %d, Material type : %s\t at Neutron Pos (%2.3f, %2.3f, %2.3f)\n", idx, to_string(meatType), localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z);
+		Pincell currentPincell = CoreManager::returnPincellByPos(Core, localNeutron);
+		Assembly currentAssembly = Core->returnAssemblyByPos(localNeutron);
+		vec3 floorNeutronPos = currentAssembly.returnFlooredNeutronPosInPincell(localNeutron);
+		Pincell thisPincell = currentAssembly.returnPincellByPos(localNeutron);
+		double DTC = currentAssembly.DTC(localNeutron, d_MatXS, localSeed);
+		double DTS = currentAssembly.DTS(localNeutron);
+		MatType meatType = currentPincell.meatType;
+		MatType modType = currentPincell.modType;
+
+		MatType currentType = currentPincell.meatOrMod(floorNeutronPos);
+		//printf("idx: %d, Material type : %s\t at Neutron Pos (%2.3f, %2.3f, %2.3f), DTC:%2.5f \n", idx, to_string(meatType), localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z, DTC);
+		//printf("idx: %d, pin type: %s, current material: %s, DTC: %f, TransXS: %f\n", idx, to_string(meatType), to_string(currentType), DTC, d_MatXS->returnMatByType(currentType).transXS[static_cast<int>(localNeutron.energy) - 1]);
+
+		printf("idx: %d, pin type: %s, current material: %s, N Pos (%f, %f, %f), floor Neutron Pos (%2.3f, %2.3f, %2.3f), dirVec: (%f, %f, %f) DTC: %f, DTS: %f\n", idx, to_string(meatType), to_string(currentType),
+			localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z, floorNeutronPos.x, floorNeutronPos.y, floorNeutronPos.z,
+			localNeutron.dirVec.x, localNeutron.dirVec.y, localNeutron.dirVec.z, DTC, DTS
+		);
 	}
 }
 
@@ -92,14 +125,10 @@ int main() {
 
 	for (int i = 0; i < d_bufferPincellVec.size(); i++) {
 		int n = h_Core.assembly[i].totalPincellNo();
-
 		cudaMalloc(&d_bufferPincellVec[i], sizeof(Pincell) * h_Core.assembly[i].totalPincellNo());
 		cudaMemcpy(d_bufferPincellVec[i], h_Core.assembly[i].pinCells, sizeof(Pincell) * n, cudaMemcpyHostToDevice);
-		
 		tmp_Assembly[i] = h_Core.assembly[i];
 		tmp_Assembly[i].pinCells = d_bufferPincellVec[i];
-
-		
 	}
 	
 	cudaMemcpy(d_bufferAssembly, tmp_Assembly.data(), sizeof(Assembly) * h_Core.assemblyNo, cudaMemcpyHostToDevice);
@@ -119,6 +148,7 @@ int main() {
 	for (int i = 0; i < h_Bank.neutronSize; i++) {
 		vec3 randPos = { h_RNG.uniform(0, h_Core.x), h_RNG.uniform(0, h_Core.y), h_RNG.uniform(0, h_Core.z) };
 		h_Bank.neutrons[i] = Neutron(randPos, vec3::randomUnit(h_RNG), static_cast<double>(h_RNG.int_dist(1, 7)), 1.0);
+		//h_Bank.neutrons[i] = Neutron(randPos, vec3::randomUnit(h_RNG), 1, 1.0);
 		h_Bank.addedNeutrons[i] = Neutron({0,0,0}, {0,0,0}, 0.0, 0.0);
 	}
 
@@ -138,15 +168,10 @@ int main() {
 	Neutron h_testNeutron{ {4.0, 4.0, 200.0}, {0.0, 0.0, 0.0}, 1.0, 1.0 };
 
 
-	/*
-	for (int i = 0; i < 10; i++) {
-		Debug::fuelLayoutDebug(h_Core.assembly[i]);
-	}
-	*/
 	
-
+	//for (int i = 0; i < 10; i++) {	Debug::fuelLayoutDebug(h_Core.assembly[i]);	}
 	
-	//CPUTest(num, &h_MatXS, &h_Core, &h_Bank);
-	GPUTest << <blockPerDim, threadPerBlock >> > (num, d_MatXS, d_Core, d_Bank);
+	//CPUTest(num, &h_MatXS, &h_Core, &h_Bank, h_SeedArr);
+	GPUTest << <blockPerDim, threadPerBlock >> > (num, d_MatXS, d_Core, d_Bank, d_SeedArr);
 
 }
