@@ -8,12 +8,12 @@ HD double Pincell::DTC(vec3 localPos, Neutron& n, XSLibrary* XSLib, GnuAMCM& RNG
 	MatType matType = this->meatOrMod(localPos);
 	
 	double transXS = XSLib->returnMatByType(matType).transXS[static_cast<int>(n.energy)-1];
-	return -log(RNG.uniform_open(0.0, 1.0)) / transXS;  
+	return -log(RNG.uniform(0.0, 1.0)) / transXS;
 }
 
 
 HD double Pincell::DTS(vec3 localPos, Neutron& n) {
-	double epsT = 1.0e-12;
+	double epsT = 1.0e-13;
 
 	// distance to the surfaces
 	double distanceToWall = 1.0e300; // guasrd value
@@ -62,8 +62,8 @@ HD double Pincell::DTS(vec3 localPos, Neutron& n) {
 	// quadratic formula: since D^2 =1 (since normalized), t = OD \pm \sqrt{ (OD)^2 - O^2 + R^2 }
 	// note that this only applies when the radius is not zero: for moderator blocks we should exclude this.
 	double distanceToPin = 1.0e300;
-	if (this->radius > 0.0) {
-		vec3 localCenter = { this->sideLength / 2 + this->centerOffset.x, this->sideLength / 2 + this->centerOffset.y, this->height / 2 };
+	if (this->radius > epsT * 1000) {
+		vec3 localCenter = { this->sideLength / 2.0 + this->centerOffset.x, this->sideLength / 2.0 + this->centerOffset.y, this->height / 2.0 };
 		localPos = localPos - localCenter;
 
 		double a = n.dirVec.x * n.dirVec.x + n.dirVec.y * n.dirVec.y;
@@ -102,6 +102,7 @@ HD Pincell& Assembly::returnPincellByIndex(int x, int y, int z) {
 	if (x >= this->xNum || y >= this->yNum || z >= this->zNum) {
 		printf("index [%d][%d][%d] out of bounds\n", x, y, z);
 		Pincell OOBPincell = Pincell(0, 0, 0);
+		printf("OOB Pincell returned\n");
 		return OOBPincell;
 		//return this->pinCells[0];
 	}

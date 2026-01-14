@@ -26,11 +26,11 @@ public:
 
 	HD MatType meatOrMod(vec3 pincellLocalPos) {
 		// this is for moderator block
-		if (radius == 0.0) { return modType; }
+		if (radius <= 1.0e-10) { return modType; }
 
 		// rest is for regular pincell
 		vec2 center = { this->sideLength / 2.0 + centerOffset.x, this->sideLength / 2.0 + centerOffset.y };
-		if ((pincellLocalPos.x - center.x) * (pincellLocalPos.x - center.x) + (pincellLocalPos.y - center.y) * (pincellLocalPos.y - center.y) > (radius * radius))
+		if ((pincellLocalPos.x - center.x) * (pincellLocalPos.x - center.x) + (pincellLocalPos.y - center.y) * (pincellLocalPos.y - center.y) >= (radius * radius))
 			return modType;
 		else 
 			return meatType;

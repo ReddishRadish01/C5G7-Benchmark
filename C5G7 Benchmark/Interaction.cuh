@@ -29,8 +29,10 @@ public:
 		int fissionNum = static_cast<int>(nu / *k_mult + RNG.uniform(0.0, 1.0));
 
 		n.dirVec = vec3::randomUnit(RNG);
+		int fissionE = XSManager::returnFissionNeutronEnergy(matXS, RNG);
 		int addIndex = atomicAdd(&(Bank->addedNeutronIndex), fissionNum - 1);
 		atomicAdd(&(Bank->addedNeutronSize), fissionNum - 1);
+		n.energy = fissionE;
 
 		for (int i = 0; i < fissionNum - 1; i++) {
 			//Bank->addedNeutrons[addIndex + i].status = true;
@@ -67,7 +69,7 @@ public:
 			reflectNormal = { 1.0, 0.0, 0.0 };
 		}
 		else if (updatedSurfacePos.y <= eps) {
-			reflectNormal = { 0.0, 1.0, 1.0 };
+			reflectNormal = { 0.0, 1.0, 0.0 };
 		}
 		else if (updatedSurfacePos.z <= eps) {
 			reflectNormal = { 0.0, 0.0, 1.0 };
@@ -81,6 +83,7 @@ public:
 
 		vec3 collisionPos = n.pos + n.dirVec * DTS;
 		vec3 reflectVec = n.dirVec - reflectNormal * 2 * n.dirVec.dot(reflectNormal);
+		collisionPos = collisionPos + reflectVec * eps * 1000;
 
 		n.pos = collisionPos;
 		n.dirVec = reflectVec;

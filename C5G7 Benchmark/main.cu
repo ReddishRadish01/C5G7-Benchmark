@@ -16,6 +16,9 @@
 #include <ctime>
 #include <sstream>
 
+//#define CPURUN
+#define GPURUN
+
 //#define XSRESULTDEBUG
 
 G void GPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* bank, unsigned long long* seedArr) {
@@ -87,8 +90,8 @@ H void CPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* ban
 }
 
 int main() {
-	int num = 200000;
-	int numCycle = 500;
+	int num = 500000;
+	int numCycle = 700;
 	int inactiveCycle = 250;
 
 	int threadPerBlock = 32;
@@ -226,7 +229,6 @@ int main() {
 
 	Neutron h_testNeutron{ {4.0, 4.0, 200.0}, {0.0, 0.0, 0.0}, 1.0, 1.0 };
 
-
 	
 	//for (int i = 0; i < 10; i++) {	Debug::fuelLayoutDebug(h_Core.assembly[i]);	}
 	
@@ -241,7 +243,7 @@ int main() {
 		double absorption = 0.0;
 		double fission = 0.0;
 		double leak = 0.0;
-		/*
+#ifdef CPURUN
 		cycle_Neutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, false);
 		addedNeutronPassResetter << <blockPerDim, threadPerBlock >> > (d_Bank);
 		cycle_addedNeutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, true);
@@ -252,7 +254,7 @@ int main() {
 		h_multK = currentNumNeutron / previousNumNeutron;
 		std::cout << "\tk:" << h_multK << "\n";
 		cudaMemcpy(d_Bank, &h_Bank, sizeof(NeutronBank), cudaMemcpyHostToDevice);
-		*/
+
 #ifdef INTERACTIONDEBUG
 		std::cout << "addedNeutron: \n";
 #endif
@@ -262,9 +264,16 @@ int main() {
 		std::cout << "\nNeutron:\n";
 #endif
 		cycle_Neutron_CPU(&h_Bank, &h_Core, &h_XSLib, h_SeedArr, &h_multK, false, absorption, fission, leak);
+#endif
 		
-		
+#ifdef GPURUN
+		cycle_addedNeutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, true);
+		addedNeutronPassResetter<<<blockPerDim, threadPerBlock>>>(d_Bank);
+		cycle_Neutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, false);
 
+		cudaMemcpy(&h_Bank, d_Bank, sizeof(NeutronBank), cudaMemcpyDeviceToHost);
+#endif
+		cudaMemcpy(&h_multK, d_multK, sizeof(double), cudaMemcpyDeviceToHost);
 		double currentNumNeutron = h_Bank.getTotalNeutronNum();
 		double oldK = h_multK;
 		std::cout << "Cycle " << i + 1 << ", currentNum: " << currentNumNeutron;
@@ -272,14 +281,20 @@ int main() {
 		previousNumNeutron = currentNumNeutron;
 		std::cout << "\tk: " << h_multK << "\n";
 		//std::cout << "\t n count : " << h_Bank.neutronSize << " addn count : " << h_Bank.addedNeutronSize << " addN addIndex : " << h_Bank.addedNeutronIndex;
-		std::cout << "  capture: " << absorption << " , fission neutron num: " << fission << ", leak: " << leak << "\n";
 
+		cudaMemcpy(d_multK, &h_multK, sizeof(double), cudaMemcpyHostToDevice);
+#ifdef CPURUN
+		std::cout << "  capture: " << absorption << " , fission neutron num: " << fission << ", leak: " << leak << "\n";
+#endif
 		klog << (i + 1) << " " << h_multK << "\n";
 		if (i > inactiveCycle) {
 			kAvg += h_multK;
 		}
 
+		
 		if (h_Bank.addedNeutronIndex > h_Bank.allocatableNeutronNum * 0.8) {
+			std::cout << "Merging:\n";
+#ifdef CPURUN
 			std::vector<Neutron> NeutronContainer;
 			for (int j = 0; j < h_Bank.allocatableNeutronNum; j++) {
 				if (!h_Bank.neutrons[j].isNullified()) {
@@ -292,7 +307,7 @@ int main() {
 					NeutronContainer.reserve(1);
 					h_Bank.addedNeutrons[j].passFlag = false;
 					NeutronContainer.emplace_back(h_Bank.addedNeutrons[j]);
-					h_Bank.addedNeutrons[j].Nullify(); 
+					h_Bank.addedNeutrons[j].Nullify();
 				}
 			}
 
@@ -311,7 +326,7 @@ int main() {
 
 				std::cout << "After sorting: Neutron size: " << h_Bank.getTotalNeutronNum() << "\n";
 			}
-			else { 
+			else {
 				h_Bank.neutronSize = NeutronContainer.size();
 				h_Bank.addedNeutronIndex = 0;
 				h_Bank.addedNeutronSize = 0;
@@ -320,12 +335,15 @@ int main() {
 				for (int j = 0; j < h_Bank.neutronSize; j++) {
 					h_Bank.neutrons[j] = NeutronContainer[j];
 				}
-				std::cout << "After sorting: Neutron size: " << h_Bank.getTotalNeutronNum() << "\n";
-
+				std::cout << "After sorting: Neutron size: " << h_Bank.getTotalNeutronNum() << "\n"
 			}
 		}
+#endif
 
-
+#ifdef GPURUN
+			GPU_Manager::compact_bank_device(d_Bank);
+		}
+#endif
 	}
 
 	kAvg /= (numCycle - inactiveCycle);
