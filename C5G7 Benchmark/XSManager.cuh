@@ -22,9 +22,8 @@ public:
 		return 0.0;
 	}
 
-	HD static InteractionType returnInteracitonType(XSLibrary& XSLib, MatType matType, unsigned long long seed, double inEnergy, double& outEnergy) {
-		GnuAMCM RNG(seed);
-		MatXS XSforCurrentMat = XSLib.returnMatByType(matType);
+	HD static InteractionType returnInteracitonType(XSLibrary* XSLib, MatType matType, GnuAMCM& RNG, double inEnergy, double& outEnergy) {
+		MatXS XSforCurrentMat = XSLib->returnMatByType(matType);
 		int currentE = static_cast<int>(inEnergy);
 
 		double xs = RNG.uniform(0.0, XSforCurrentMat.transXS[currentE - 1]);
@@ -51,15 +50,15 @@ public:
 				double group6 = group5 + XSforCurrentMat.elsXS[currentE - 1][5];
 				double group7 = group6 + XSforCurrentMat.elsXS[currentE - 1][6];
 
-				if (elasRNG < group1) { outE = 0; }
-				else if (elasRNG < group2) { outE = 1; }
-				else if (elasRNG < group3) { outE = 2; }
-				else if (elasRNG < group4) { outE = 3; }
-				else if (elasRNG < group5) { outE = 4; }
-				else if (elasRNG < group6) { outE = 5; }
-				else if (elasRNG < group7) { outE = 6; }
+				if (elasRNG < group1) { outE = 1; }
+				else if (elasRNG < group2) { outE = 2; }
+				else if (elasRNG < group3) { outE = 3; }
+				else if (elasRNG < group4) { outE = 4; }
+				else if (elasRNG < group5) { outE = 5; }
+				else if (elasRNG < group6) { outE = 6; }
+				else if (elasRNG < group7) { outE = 7; }
 				else { outE = currentE; }
-				double outEnergy = outE;
+				outEnergy = outE;
 
 				return InteractionType::nel;
 			}
@@ -67,7 +66,7 @@ public:
 		else {
 			double cumCap = XSforCurrentMat.capXS[currentE - 1];
 			double cumFis = cumCap + XSforCurrentMat.fisXS[currentE - 1];
-			double cumElas = cumFis;
+			double cumElas = cumFis + totalElas;
 			if (xs < cumCap) {
 				return InteractionType::ng;
 			}
@@ -86,18 +85,36 @@ public:
 				double group6 = group5 + XSforCurrentMat.elsXS[currentE - 1][5];
 				double group7 = group6 + XSforCurrentMat.elsXS[currentE - 1][6];
 
-				if (elasRNG < group1) { outE = 0; }
-				else if (elasRNG < group2) { outE = 1; }
-				else if (elasRNG < group3) { outE = 2; }
-				else if (elasRNG < group4) { outE = 3; }
-				else if (elasRNG < group5) { outE = 4; }
-				else if (elasRNG < group6) { outE = 5; }
-				else if (elasRNG < group7) { outE = 6; }
+				if (elasRNG < group1) { outE = 1; }
+				else if (elasRNG < group2) { outE = 2; }
+				else if (elasRNG < group3) { outE = 3; }
+				else if (elasRNG < group4) { outE = 4; }
+				else if (elasRNG < group5) { outE = 5; }
+				else if (elasRNG < group6) { outE = 6; }
+				else if (elasRNG < group7) { outE = 7; }
 				else { outE = currentE; }
-				double outEnergy = outE;
+				outEnergy = outE;
 
 				return InteractionType::nel;
 			}
 		}
+
+		//last resort - 
+		outEnergy = currentE;
+		return InteractionType::nel;
+	} 
+
+	HD static int returnFissionNeutronEnergy(MatXS& fisMatXS, GnuAMCM& RNG) {
+		double chiRNG = RNG.uniform(0.0, 1.0);
+		double chiSelect = 0.0;
+		for (int i = 0; i < 7; i++) {
+			chiSelect += fisMatXS.chi[i];
+			if (chiRNG < chiSelect) {
+				return i+1;
+			}
+		}
+		
+		// last resort
+		return 1;
 	}
 };

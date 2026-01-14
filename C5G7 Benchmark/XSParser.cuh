@@ -8,6 +8,42 @@
 #include <sstream>
 #include <iostream>
 
+enum class InteractionType {
+	ntot,
+	nel,
+	nTr,
+	nAbs,
+	ng,
+	nf,
+
+};
+
+// you have to make it enum class - prevent it from being recognized as global namespace - a unscoped enum. 
+enum class XSType {
+	tot,
+	trans,
+	abs,
+	cap,
+	fis,
+	nu,
+	chi,
+	el
+};
+
+HD static inline const char* to_string(InteractionType t) {
+	switch (t) {
+	case InteractionType::ntot:     return "ntot";
+	case InteractionType::nel:		return "nel";
+	case InteractionType::nTr:		return "nTr";
+	case InteractionType::nAbs:		return "nAbs";
+	case InteractionType::ng:		return "ng";
+	case InteractionType::nf:		return "nf";
+	default:						return "nel";
+	}
+}
+
+
+
 enum class MatType {
 	UO2,
 	MOX4_3,
@@ -112,13 +148,16 @@ struct MatXS {
 		// this below is to compensate for 10^{-5} degress of bias in transXS compared when every other XS is added up.
 		// we force the transXS to be the sum of other XS.
 		//if 
-
+		
+		/*
 		for (int g = 0; g < 7; g++) {
 			transXS[g] = capXS[g] + fisXS[g];
 			for (int i = 0; i < 7; i++) {
 				transXS[g] += elsXS[g][i];
 			}
 		}
+		*/
+		
 		
 		
 	}

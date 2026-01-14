@@ -83,12 +83,13 @@ __host__ __device__ void Neutron::Nullify() {
 	this->weight = 0.0;
 }
 
-__host__ __device__ void Neutron::reInitialize(vec3 pos, vec3 dirVec, double energy, double weight) {
+__host__ __device__ void Neutron::reInitialize(vec3 pos, vec3 dirVec, double energy, double weight, bool passFlag) {
 	this->pos = pos;
 	this->dirVec = dirVec;
 	this->energy = energy;
 	this->status = true;
 	this->weight = weight;
+	this->passFlag = passFlag;
 }
 
 __host__ __device__ bool Neutron::isNullified() const {

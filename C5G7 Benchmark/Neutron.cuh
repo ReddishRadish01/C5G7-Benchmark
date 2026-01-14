@@ -116,10 +116,11 @@ struct Neutron {
 
 	__host__ __device__ void Nullify();
 	__host__ __device__ bool isNullified() const;
-	__host__ __device__ void reInitialize(vec3 pos, vec3 dir, double energy, double weight = 1.0);
+	__host__ __device__ void reInitialize(vec3 pos, vec3 dir, double energy, double weight, bool passFlag);
 	
 
 	__host__ __device__ void updateWithLength(double length);
+	//HD vec3 pos
 
 	HD void setWeight(double weight);
 

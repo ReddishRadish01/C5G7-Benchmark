@@ -4,12 +4,11 @@
 #include "Neutron.cuh"
 #include "Core.cuh"
 
-HD double Pincell::DTC(vec3 localPos, Neutron& n, XSLibrary* XSLib, unsigned long long xi) {
-	GnuAMCM RNG(xi);
+HD double Pincell::DTC(vec3 localPos, Neutron& n, XSLibrary* XSLib, GnuAMCM& RNG) {
 	MatType matType = this->meatOrMod(localPos);
 	
 	double transXS = XSLib->returnMatByType(matType).transXS[static_cast<int>(n.energy)-1];
-	return RNG.uniform_open(0.0, 1.0) / transXS;  
+	return -log(RNG.uniform_open(0.0, 1.0)) / transXS;  
 }
 
 
@@ -17,7 +16,7 @@ HD double Pincell::DTS(vec3 localPos, Neutron& n) {
 	double epsT = 1.0e-12;
 
 	// distance to the surfaces
-	double distanceToWall = 1.0e300; // guard value
+	double distanceToWall = 1.0e300; // guasrd value
 	if (n.dirVec.x > epsT) {
 		double tX = (this->sideLength - localPos.x) / n.dirVec.x;
 		if (tX >= 0 && tX < distanceToWall) {
@@ -115,8 +114,18 @@ HD int Assembly::totalPincellNo() {
 	return this->xNum * this->yNum * this->zNum;
 }
 
-HD Pincell& Assembly::returnPincellByPos(Neutron n) {
+HD Pincell& Assembly::returnPincellByPos(Neutron& n) {
 	vec3 localAssemblyPos = n.pos - this->startPos;
+
+	double eps = 1.0e-14;
+	double x = n.dirVec.x > 0 ? eps : -eps;
+	double y = n.dirVec.y > 0 ? eps : -eps;
+	double z = n.dirVec.z > 0 ? eps : -eps;
+	vec3 epsVec = { x, y, z };
+	localAssemblyPos = localAssemblyPos + epsVec;
+
+	//n.pos = n.pos + epsVec;
+
 	double cellSideLength = this->pinCells[0].sideLength;
 	double cellHeight = this->pinCells[0].height;
 	int xIdx = static_cast<int>(localAssemblyPos.x / cellSideLength);
@@ -124,7 +133,6 @@ HD Pincell& Assembly::returnPincellByPos(Neutron n) {
 	int zIdx = static_cast<int>(localAssemblyPos.z / cellHeight);
 
 	return this->returnPincellByIndex(xIdx, yIdx, zIdx);
-
 }
 
 HD vec3 Assembly::returnFlooredNeutronPosInPincell(Neutron& n) {
@@ -148,12 +156,11 @@ HD vec3 Assembly::returnFlooredNeutronPosInPincell(Neutron& n) {
 }
 
 
-HD double Assembly::DTC(Neutron& n, XSLibrary* XSLib, unsigned long long xi) {
-	GnuAMCM RNG(xi);
+HD double Assembly::DTC(Neutron& n, XSLibrary* XSLib, GnuAMCM& RNG) {
 	Pincell currentPincell = this->returnPincellByPos(n);
 	vec3 pincellLocalPos = this->returnFlooredNeutronPosInPincell(n);
 	//MatType mat = currentPincell.meatOrMod(pincellLocalPos);
-	return currentPincell.DTC(pincellLocalPos, n, XSLib, RNG.gen());
+	return currentPincell.DTC(pincellLocalPos, n, XSLib, RNG);
 }
 
 HD double Assembly::DTS(Neutron& n) {

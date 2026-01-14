@@ -3,7 +3,7 @@
 #include "XSParser.cuh"
 #include "Neutron.cuh"
 
-
+constexpr double meatOrModEps = 1.0e-4;
 
 
 class Pincell {
@@ -37,8 +37,19 @@ public:
 	}
 
 
-	HD double DTC(vec3 localPos, Neutron& n, XSLibrary* XSLib, unsigned long long xi);
+	HD double DTC(vec3 localPos, Neutron& n, XSLibrary* XSLib, GnuAMCM& RNG);
 	HD double DTS(vec3 localPos, Neutron& n);
+
+	HD bool isInsidePin(vec3 pincellLocalPos) {
+		if (radius == 0.0) { return false; }
+
+		// rest is for regular pincell
+		vec2 center = { this->sideLength / 2.0 + centerOffset.x, this->sideLength / 2.0 + centerOffset.y };
+		if ((pincellLocalPos.x - center.x) * (pincellLocalPos.x - center.x) + (pincellLocalPos.y - center.y) * (pincellLocalPos.y - center.y) >= (radius * radius))
+			return false;
+		else
+			return true;
+	}
 };
 
 class Assembly {
@@ -135,9 +146,9 @@ public:
 	HD Pincell& returnPincellByIndex(int x, int y, int z);
 
 	HD int totalPincellNo();
-	HD Pincell& returnPincellByPos(Neutron n);
+	HD Pincell& returnPincellByPos(Neutron& n);
 	HD vec3 returnFlooredNeutronPosInPincell(Neutron& n);
-	HD double DTC(Neutron& n, XSLibrary* XSLib, unsigned long long xi);
+	HD double DTC(Neutron& n, XSLibrary* XSLib, GnuAMCM& RNG);
 	HD double DTS(Neutron& n);
 };
 
@@ -170,7 +181,16 @@ public:
 	}
 
 
-	HD Assembly& returnAssemblyByPos(Neutron& n) {
+	HD Assembly& returnAssemblyByNeutron(Neutron& n) {
+		double eps = 1.0e-15;
+		double x = n.dirVec.x > 0 ? eps : -eps;
+		double y = n.dirVec.y > 0 ? eps : -eps;
+		double z = n.dirVec.z > 0 ? eps : -eps;
+		vec3 epsVec = { x, y, z };
+		//Neutron localN = n;
+		//localN.pos = localN.pos + epsVec;
+		//n.pos = n.pos + epsVec;
+
 		for (int i = 0; i < this->assemblyNo; i++) {
 			vec3 endPos = this->assembly[i].startPos + this->assembly[i].length;
 			if (n.pos.x >= this->assembly[i].startPos.x && n.pos.x < endPos.x) {

@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 
+
 namespace Constants {
 	// parameters : use gram -> 
 	// for mass, variables are declared in amu - convert to g with the amuToG constnat.
@@ -26,30 +27,3 @@ namespace Constants {
 
 }
 
-enum class InteractionType {
-	ntot,
-	nel,
-	nTr,
-	nAbs,
-	ng,
-	nf,
-	
-};
-/*
-enum AbsorptionType {
-	nf,
-	ng
-};
-*/
-
-// you have to make it enum class - prevent it from being recognized as global namespace - a unscoped enum. 
-enum class XSType {
-	tot,
-	trans,
-	abs,
-	cap,
-	fis,
-	nu,
-	chi,
-	el
-};
