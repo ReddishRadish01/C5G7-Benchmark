@@ -28,3 +28,15 @@
 	#define G
 #endif
 
+#define CUDA_CHECK(call) do { \
+  cudaError_t err = (call); \
+  if (err != cudaSuccess) { \
+    fprintf(stderr, "CUDA error %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
+    std::exit(1); \
+  } \
+} while(0)
+
+#define CUDA_KERNEL_CHECK() do { \
+  CUDA_CHECK(cudaGetLastError()); \
+  CUDA_CHECK(cudaDeviceSynchronize()); \
+} while(0)

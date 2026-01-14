@@ -149,14 +149,14 @@ struct MatXS {
 		// we force the transXS to be the sum of other XS.
 		//if 
 		
-		/*
+		
 		for (int g = 0; g < 7; g++) {
 			transXS[g] = capXS[g] + fisXS[g];
 			for (int i = 0; i < 7; i++) {
 				transXS[g] += elsXS[g][i];
 			}
 		}
-		*/
+		
 		
 		
 		

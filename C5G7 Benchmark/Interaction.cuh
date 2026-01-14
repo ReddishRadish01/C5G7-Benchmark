@@ -31,6 +31,10 @@ public:
 		n.dirVec = vec3::randomUnit(RNG);
 		int fissionE = XSManager::returnFissionNeutronEnergy(matXS, RNG);
 		int addIndex = atomicAdd(&(Bank->addedNeutronIndex), fissionNum - 1);
+		int hardCap = addIndex + (fissionNum - 1);
+		if (hardCap >= Bank->allocatableNeutronNum) {
+			return;
+		}
 		atomicAdd(&(Bank->addedNeutronSize), fissionNum - 1);
 		n.energy = fissionE;
 

@@ -26,13 +26,28 @@ G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLib, un
     }
     GnuAMCM RNG(seedNo[idx]);
 
-    double eps = 1.0e-10;
+    double eps = 1.0e-11;
 
     if (!Bank->neutrons[idx].isNullified()) {
         for (int i = 0; i < 100; i++) {
             //vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(localNeutron);
             Assembly currentAssembly = Core->returnAssemblyByNeutron(Bank->neutrons[idx]);
+            if (Bank->neutrons[idx].isNullified()) {
+                atomicAdd(&(Bank->neutronSize), -1);
+#ifdef OUTBOUNDDEBUG
+                printf("Neutron idx %d nullfied because Assembly positioning got fucked\n", idx);
+#endif
+                seedNo[idx] = RNG.gen();
+                return;
+            }
             Pincell currentPincell = currentAssembly.returnPincellByPos(Bank->neutrons[idx]);
+            if (currentPincell.sideLength == 0.0 && currentPincell.height == 0.0) {
+                printf("error in returning pincell of neutron idx %d, - nullifying this neutron\n", idx);
+                Bank->neutrons[idx].Nullify();
+                atomicAdd(&(Bank->neutronSize), -1);
+                seedNo[idx] = RNG.gen();
+                return;
+            }
 
             double DTC = currentAssembly.DTC(Bank->neutrons[idx], XSLib, RNG);
             double DTS = currentAssembly.DTS(Bank->neutrons[idx]);
@@ -94,7 +109,7 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLi
         return;
     }
     GnuAMCM RNG(seedNo[idx]);
-    double eps = 1.0e-10;
+    double eps = 1.0e-11;
 
     if (!Bank->addedNeutrons[idx].isNullified()) {
         if (Bank->addedNeutrons[idx].passFlag) {
@@ -107,7 +122,23 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLi
         for (int i = 0; i < 100; i++) {
             //vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(localNeutron);
             Assembly currentAssembly = Core->returnAssemblyByNeutron(Bank->addedNeutrons[idx]);
+            if (Bank->addedNeutrons[idx].isNullified()) {
+                atomicAdd(&(Bank->addedNeutronSize), -1);
+#ifdef OUTBOUNDDEBUG
+                printf("Neutron idx %d nullfied because Assembly positioning got fucked\n", idx);
+#endif
+                seedNo[idx] = RNG.gen();
+                return;
+            }
             Pincell currentPincell = currentAssembly.returnPincellByPos(Bank->addedNeutrons[idx]);
+            if (currentPincell.sideLength == 0.0 && currentPincell.height == 0.0) {
+                printf("error in returning pincell of neutron idx %d, - nullifying this neutron\n", idx);
+                Bank->addedNeutrons[idx].Nullify();
+                atomicAdd(&(Bank->addedNeutronSize), -1);
+                seedNo[idx] = RNG.gen();
+                return;
+            }
+
 
             double DTC = currentAssembly.DTC(Bank->addedNeutrons[idx], XSLib, RNG);
             double DTS = currentAssembly.DTS(Bank->addedNeutrons[idx]);
@@ -267,6 +298,11 @@ H void cycle_addedNeutron_CPU(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* 
                     break;
                 }
                 Pincell currentPincell = currentAssembly.returnPincellByPos(Bank->addedNeutrons[idx]);
+                if (currentPincell.sideLength == 0 && currentPincell.height == 0) {
+                    Bank->addedNeutrons[idx].Nullify();
+                    seedNo[idx] = RNG.gen();
+                    break;
+                }
 
                 double DTC = currentAssembly.DTC(Bank->addedNeutrons[idx], XSLib, RNG);
                 double DTS = currentAssembly.DTS(Bank->addedNeutrons[idx]);

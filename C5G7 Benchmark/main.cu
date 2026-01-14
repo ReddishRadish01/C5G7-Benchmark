@@ -90,9 +90,9 @@ H void CPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* ban
 }
 
 int main() {
-	int num = 500000;
-	int numCycle = 700;
-	int inactiveCycle = 250;
+	int num = 200000;
+	int numCycle = 3000;
+	int inactiveCycle = 1000;
 
 	int threadPerBlock = 32;
 	int blockPerDim = (num + threadPerBlock - 1) / threadPerBlock;
@@ -237,9 +237,14 @@ int main() {
 
 	double tempK = h_multK;
 	double previousNumNeutron = h_Bank.getTotalNeutronNum();
-	double kAvg = 0.0;
+	double meanK = 0.0;
+	double M2 = 0.0;
+	int errorCounter = 0;
+	int cycleNum = 0;
+	int activeCount = 0;
 
 	for (int i = 0; i < numCycle; i++) {
+		cycleNum++;
 		double absorption = 0.0;
 		double fission = 0.0;
 		double leak = 0.0;
@@ -268,10 +273,14 @@ int main() {
 		
 #ifdef GPURUN
 		cycle_addedNeutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, true);
+		CUDA_KERNEL_CHECK();
 		addedNeutronPassResetter<<<blockPerDim, threadPerBlock>>>(d_Bank);
+		CUDA_KERNEL_CHECK();
 		cycle_Neutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, false);
+		CUDA_KERNEL_CHECK();
 
 		cudaMemcpy(&h_Bank, d_Bank, sizeof(NeutronBank), cudaMemcpyDeviceToHost);
+		cudaMemcpy(&h_multK, d_multK, sizeof(double), cudaMemcpyDeviceToHost);
 #endif
 		cudaMemcpy(&h_multK, d_multK, sizeof(double), cudaMemcpyDeviceToHost);
 		double currentNumNeutron = h_Bank.getTotalNeutronNum();
@@ -282,13 +291,31 @@ int main() {
 		std::cout << "\tk: " << h_multK << "\n";
 		//std::cout << "\t n count : " << h_Bank.neutronSize << " addn count : " << h_Bank.addedNeutronSize << " addN addIndex : " << h_Bank.addedNeutronIndex;
 
+		if (oldK == h_multK) {
+			errorCounter++;
+			if (errorCounter == 5) {
+				std::cout << "Error in GPU Memory - early termination\n";
+				break;
+			}
+		}
+		else {
+			errorCounter = 0;
+		}
+
 		cudaMemcpy(d_multK, &h_multK, sizeof(double), cudaMemcpyHostToDevice);
 #ifdef CPURUN
 		std::cout << "  capture: " << absorption << " , fission neutron num: " << fission << ", leak: " << leak << "\n";
 #endif
+
 		klog << (i + 1) << " " << h_multK << "\n";
 		if (i > inactiveCycle) {
-			kAvg += h_multK;
+			activeCount += 1;
+			double x = h_multK;
+			double delta = x - meanK;
+			meanK += delta / activeCount;
+			double delta2 = x - meanK;
+			M2 += delta * delta2;
+
 		}
 
 		
@@ -346,9 +373,45 @@ int main() {
 #endif
 	}
 
-	kAvg /= (numCycle - inactiveCycle);
-	
-	std::cout << "\n initial Neutron number: " << num << ", for cycle of " << numCycle - inactiveCycle << ", average k = " << kAvg << "\n";
+	if (activeCount >= 2) {
+		double var = M2 / (activeCount - 1);
+		double stddev = std::sqrt(var);
+		double stderr_mean = stddev / std::sqrt(static_cast<double>(activeCount));
+
+		std::cout << "\n\nActive cycles: " << activeCount << "\n";
+		std::cout << "k_mean: " << meanK << "\n";
+		std::cout << "k_stddev(cycle): " << stddev << "\n";
+		std::cout << "k_stderr(mean): " << stderr_mean << "\n";
+	}
+
+
+	//std::cout << "\n initial Neutron number: " << num << ", for cycle of " << cycleNum - inactiveCycle << ", average k = " << meanK << "\n";
 
 	klog.close();
+
+	delete[] h_SeedArr;
+	h_SeedArr = nullptr;
+
+	if (d_bufferNeutrons) cudaFree(d_bufferNeutrons);
+	if (d_bufferAddedNeutrons) cudaFree(d_bufferAddedNeutrons);
+	if (d_Bank) cudaFree(d_Bank);
+
+	if (d_Neutron) cudaFree(d_Neutron);
+
+	for (auto& p : d_bufferPincellVec) {
+		if (p) cudaFree(p);
+		p = nullptr;
+	}
+	if (d_bufferAssembly) cudaFree(d_bufferAssembly);
+
+	if (d_Core) cudaFree(d_Core);
+
+	if (d_XSLib) cudaFree(d_XSLib);
+
+	if (d_SeedArr) cudaFree(d_SeedArr);
+
+	if (d_multK) cudaFree(d_multK);
+
+	// Optional: reset device (helps detect leaks in some tools)
+	cudaDeviceReset();
 }
