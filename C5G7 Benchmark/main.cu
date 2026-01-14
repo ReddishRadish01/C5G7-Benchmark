@@ -87,8 +87,9 @@ H void CPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* ban
 }
 
 int main() {
-	int num = 100000;
+	int num = 200000;
 	int numCycle = 500;
+	int inactiveCycle = 250;
 
 	int threadPerBlock = 32;
 	int blockPerDim = (num + threadPerBlock - 1) / threadPerBlock;
@@ -234,6 +235,8 @@ int main() {
 
 	double tempK = h_multK;
 	double previousNumNeutron = h_Bank.getTotalNeutronNum();
+	double kAvg = 0.0;
+
 	for (int i = 0; i < numCycle; i++) {
 		double absorption = 0.0;
 		double fission = 0.0;
@@ -267,11 +270,14 @@ int main() {
 		std::cout << "Cycle " << i + 1 << ", currentNum: " << currentNumNeutron;
 		h_multK = h_multK * currentNumNeutron / previousNumNeutron;
 		previousNumNeutron = currentNumNeutron;
-		std::cout << "\tk:" << h_multK << "\n";
+		std::cout << "\tk: " << h_multK << "\n";
 		//std::cout << "\t n count : " << h_Bank.neutronSize << " addn count : " << h_Bank.addedNeutronSize << " addN addIndex : " << h_Bank.addedNeutronIndex;
 		std::cout << "  capture: " << absorption << " , fission neutron num: " << fission << ", leak: " << leak << "\n";
 
 		klog << (i + 1) << " " << h_multK << "\n";
+		if (i > inactiveCycle) {
+			kAvg += h_multK;
+		}
 
 		if (h_Bank.addedNeutronIndex > h_Bank.allocatableNeutronNum * 0.8) {
 			std::vector<Neutron> NeutronContainer;
@@ -321,6 +327,10 @@ int main() {
 
 
 	}
+
+	kAvg /= (numCycle - inactiveCycle);
+	
+	std::cout << "\n initial Neutron number: " << num << ", for cycle of " << numCycle - inactiveCycle << ", average k = " << kAvg << "\n";
 
 	klog.close();
 }

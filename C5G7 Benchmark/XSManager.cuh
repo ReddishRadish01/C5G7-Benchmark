@@ -24,7 +24,7 @@ public:
 
 	HD static InteractionType returnInteracitonType(XSLibrary* XSLib, MatType matType, GnuAMCM& RNG, double inEnergy, double& outEnergy) {
 		MatXS XSforCurrentMat = XSLib->returnMatByType(matType);
-		int currentE = static_cast<int>(inEnergy);
+		int currentE = static_cast<int>(inEnergy + 1.0e-15);
 
 		double xs = RNG.uniform(0.0, XSforCurrentMat.transXS[currentE - 1]);
 		double totalElas = 0.0;
@@ -85,13 +85,13 @@ public:
 				double group6 = group5 + XSforCurrentMat.elsXS[currentE - 1][5];
 				double group7 = group6 + XSforCurrentMat.elsXS[currentE - 1][6];
 
-				if (elasRNG < group1) { outE = 1; }
-				else if (elasRNG < group2) { outE = 2; }
-				else if (elasRNG < group3) { outE = 3; }
-				else if (elasRNG < group4) { outE = 4; }
-				else if (elasRNG < group5) { outE = 5; }
-				else if (elasRNG < group6) { outE = 6; }
-				else if (elasRNG < group7) { outE = 7; }
+				if (elasRNG < group1) { outE = 1.0; }
+				else if (elasRNG < group2) { outE = 2.0; }
+				else if (elasRNG < group3) { outE = 3.0; }
+				else if (elasRNG < group4) { outE = 4.0; }
+				else if (elasRNG < group5) { outE = 5.0; }
+				else if (elasRNG < group6) { outE = 6.0; }
+				else if (elasRNG < group7) { outE = 7.0; }
 				else { outE = currentE; }
 				outEnergy = outE;
 
