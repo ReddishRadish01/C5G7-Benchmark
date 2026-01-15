@@ -160,6 +160,7 @@ struct MatXS {
 		
 		
 		
+		
 	}
 
 	HD double returnXSbyType(XSType xsType, double currentEnergy, double destination = 1.0) const {

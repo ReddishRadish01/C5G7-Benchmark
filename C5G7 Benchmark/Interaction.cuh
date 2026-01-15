@@ -35,6 +35,7 @@ public:
 		if (hardCap >= Bank->allocatableNeutronNum) {
 			return;
 		}
+
 		atomicAdd(&(Bank->addedNeutronSize), fissionNum - 1);
 		n.energy = fissionE;
 

@@ -21,73 +21,6 @@
 
 //#define XSRESULTDEBUG
 
-G void GPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* bank, unsigned long long* seedArr) {
-	int idx = threadIdx.x + blockIdx.x * blockDim.x;
-	if (idx < num) {
-		GnuAMCM RNG(seedArr[idx]);
-		//printf("Cross Section: %.9f\n", d_MatXS->UO2.transXS[0]);
-		Neutron localNeutron = bank->neutrons[idx];
-
-		//MatType meatType = Core->returnAssemblyByPos(bank->neutrons[idx]).returnPincellByPos(bank->neutrons[idx]).meatType;
-		Pincell currentPincell = CoreManager::returnPincellByPos(Core, localNeutron);
-		Assembly currentAssembly = Core->returnAssemblyByNeutron(localNeutron);
-		vec3 floorNeutronPos = currentAssembly.returnFlooredNeutronPosInPincell(localNeutron);
-		//Pincell thisPincell = currentAssembly.returnPincellByPos(localNeutron);
-		double DTC = currentAssembly.DTC(localNeutron, d_MatXS, RNG);
-		double DTS = currentAssembly.DTS(localNeutron);
-		MatType meatType = currentPincell.meatType;
-		MatType modType = currentPincell.modType;
-
-		MatType currentType = currentPincell.meatOrMod(floorNeutronPos);
-		double outEnergy = 0.0;
-		InteractionType interaction = XSManager::returnInteracitonType(d_MatXS, currentType, RNG, localNeutron.energy, outEnergy);
-		//printf("idx: %d, Material type : %s\t at Neutron Pos (%2.3f, %2.3f, %2.3f), DTC:%2.5f \n", idx, to_string(meatType), localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z, DTC);
-		//printf("idx: %d, pin type: %s, current material: %s, DTC: %f, TransXS: %f\n", idx, to_string(meatType), to_string(currentType), DTC, d_MatXS->returnMatByType(currentType).transXS[static_cast<int>(localNeutron.energy) - 1]);
-		/*
-		printf("idx: %d, pin type: %s, current material: %s, N Pos (%f, %f, %f), floor Neutron Pos (%2.3f, %2.3f, %2.3f), dirVec: (%f, %f, %f) DTC: %f, DTS: %f\n", idx, to_string(meatType), to_string(currentType),
-			localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z, floorNeutronPos.x, floorNeutronPos.y, floorNeutronPos.z,
-			localNeutron.dirVec.x, localNeutron.dirVec.y, localNeutron.dirVec.z, DTC, DTS
-		);
-		*/
-		printf("idx: %d, pin type: %s, current material: %s, Interaction type: %s\n",
-			idx, to_string(meatType), to_string(currentType), to_string(interaction)
-		);
-	}
-}
-
-H void CPUTest(int num, XSLibrary* d_MatXS, C5G7Geometry* Core, NeutronBank* bank, unsigned long long* seedArr) {
-	for(int idx = 0; idx < num; idx++) {
-		GnuAMCM RNG(seedArr[idx]);
-		Neutron localNeutron = bank->neutrons[idx];
-
-		//MatType meatType = Core->returnAssemblyByPos(bank->neutrons[idx]).returnPincellByPos(bank->neutrons[idx]).meatType;
-		Pincell currentPincell = CoreManager::returnPincellByPos(Core, localNeutron);
-		Assembly currentAssembly = Core->returnAssemblyByNeutron(localNeutron);
-		vec3 floorNeutronPos = currentAssembly.returnFlooredNeutronPosInPincell(localNeutron);
-		Pincell thisPincell = currentAssembly.returnPincellByPos(localNeutron);
-		double DTC = currentAssembly.DTC(localNeutron, d_MatXS, RNG);
-		double DTS = currentAssembly.DTS(localNeutron);
-		MatType meatType = currentPincell.meatType;
-		MatType modType = currentPincell.modType;
-
-		MatType currentType = currentPincell.meatOrMod(floorNeutronPos);
-		double outEnergy = 0.0;
-		InteractionType interaction = XSManager::returnInteracitonType(d_MatXS, currentType, RNG, localNeutron.energy, outEnergy);
-		//printf("idx: %d, Material type : %s\t at Neutron Pos (%2.3f, %2.3f, %2.3f), DTC:%2.5f \n", idx, to_string(meatType), localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z, DTC);
-		//printf("idx: %d, pin type: %s, current material: %s, DTC: %f, TransXS: %f\n", idx, to_string(meatType), to_string(currentType), DTC, d_MatXS->returnMatByType(currentType).transXS[static_cast<int>(localNeutron.energy) - 1]);
-
-		/*
-		printf("idx: %d, pin type: %s, current material: %s, N Pos (%f, %f, %f), floor Neutron Pos (%2.3f, %2.3f, %2.3f), dirVec: (%f, %f, %f) DTC: %f, DTS: %f\n", idx, to_string(meatType), to_string(currentType),
-			localNeutron.pos.x, localNeutron.pos.y, localNeutron.pos.z, floorNeutronPos.x, floorNeutronPos.y, floorNeutronPos.z,
-			localNeutron.dirVec.x, localNeutron.dirVec.y, localNeutron.dirVec.z, DTC, DTS
-		);
-		*/
-
-		printf("idx: %d, pin type: %s, current material: %s, Interaction type: %s, curEnergy: %f, outEnergy: %f\n",
-			idx, to_string(meatType), to_string(currentType), to_string(interaction), localNeutron.energy, outEnergy
-		);
-	}
-}
 
 int main() {
 	int num = 200000;
@@ -248,42 +181,27 @@ int main() {
 		double absorption = 0.0;
 		double fission = 0.0;
 		double leak = 0.0;
-#ifdef CPURUN
-		cycle_Neutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, false);
-		addedNeutronPassResetter << <blockPerDim, threadPerBlock >> > (d_Bank);
-		cycle_addedNeutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, true);
-
-		cudaMemcpy(&h_Bank, d_Bank, sizeof(NeutronBank), cudaMemcpyDeviceToHost);
 		double currentNumNeutron = h_Bank.getTotalNeutronNum();
-		std::cout << "Cycle " << i + 1 << ", currentNum: " << currentNumNeutron;
-		h_multK = currentNumNeutron / previousNumNeutron;
-		std::cout << "\tk:" << h_multK << "\n";
-		cudaMemcpy(d_Bank, &h_Bank, sizeof(NeutronBank), cudaMemcpyHostToDevice);
 
-#ifdef INTERACTIONDEBUG
-		std::cout << "addedNeutron: \n";
-#endif
+#ifdef CPURUN
 		cycle_addedNeutron_CPU(&h_Bank, &h_Core, &h_XSLib, h_SeedArr, &h_multK, true, absorption, fission, leak);
 		addedNeutronPassResetter_CPU(&h_Bank);
-#ifdef INTERACTIONDEBUG
-		std::cout << "\nNeutron:\n";
-#endif
 		cycle_Neutron_CPU(&h_Bank, &h_Core, &h_XSLib, h_SeedArr, &h_multK, false, absorption, fission, leak);
 #endif
 		
 #ifdef GPURUN
 		cycle_addedNeutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, true);
-		CUDA_KERNEL_CHECK();
+		//CUDA_KERNEL_CHECK();
 		addedNeutronPassResetter<<<blockPerDim, threadPerBlock>>>(d_Bank);
-		CUDA_KERNEL_CHECK();
+		//CUDA_KERNEL_CHECK();
 		cycle_Neutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, false);
-		CUDA_KERNEL_CHECK();
+		//CUDA_KERNEL_CHECK();
 
 		cudaMemcpy(&h_Bank, d_Bank, sizeof(NeutronBank), cudaMemcpyDeviceToHost);
 		cudaMemcpy(&h_multK, d_multK, sizeof(double), cudaMemcpyDeviceToHost);
 #endif
-		cudaMemcpy(&h_multK, d_multK, sizeof(double), cudaMemcpyDeviceToHost);
-		double currentNumNeutron = h_Bank.getTotalNeutronNum();
+		
+		currentNumNeutron = h_Bank.getTotalNeutronNum();
 		double oldK = h_multK;
 		std::cout << "Cycle " << i + 1 << ", currentNum: " << currentNumNeutron;
 		h_multK = h_multK * currentNumNeutron / previousNumNeutron;
@@ -293,7 +211,7 @@ int main() {
 
 		if (oldK == h_multK) {
 			errorCounter++;
-			if (errorCounter == 5) {
+			if (errorCounter == 10) {
 				std::cout << "Error in GPU Memory - early termination\n";
 				break;
 			}
@@ -362,7 +280,7 @@ int main() {
 				for (int j = 0; j < h_Bank.neutronSize; j++) {
 					h_Bank.neutrons[j] = NeutronContainer[j];
 				}
-				std::cout << "After sorting: Neutron size: " << h_Bank.getTotalNeutronNum() << "\n"
+				std::cout << "After sorting: Neutron size: " << h_Bank.getTotalNeutronNum() << "\n";
 			}
 		}
 #endif
@@ -371,6 +289,7 @@ int main() {
 			GPU_Manager::compact_bank_device(d_Bank);
 		}
 #endif
+		
 	}
 
 	if (activeCount >= 2) {
@@ -413,5 +332,6 @@ int main() {
 	if (d_multK) cudaFree(d_multK);
 
 	// Optional: reset device (helps detect leaks in some tools)
+	// this would really help
 	cudaDeviceReset();
 }

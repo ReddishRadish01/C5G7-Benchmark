@@ -24,7 +24,7 @@ public:
 
 	HD static InteractionType returnInteracitonType(XSLibrary* XSLib, MatType matType, GnuAMCM& RNG, double inEnergy, double& outEnergy) {
 		MatXS XSforCurrentMat = XSLib->returnMatByType(matType);
-		int currentE = static_cast<int>(inEnergy + 1.0e-15);
+		int currentE = static_cast<int>(inEnergy);
 
 		double xs = RNG.uniform(0.0, XSforCurrentMat.transXS[currentE - 1]);
 		double totalElas = 0.0;

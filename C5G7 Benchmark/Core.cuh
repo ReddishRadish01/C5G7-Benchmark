@@ -65,6 +65,11 @@ public:
 
 	H Assembly() = default;
 
+	H Assembly(vec3 startPos, vec3 length, int x, int y, int z)
+		: startPos(startPos), length(length), xNum(x), yNum(y), zNum(z)
+	{
+	}
+
 	H void Initialize(std::string assemblyTxt, double cellHeight = 0.0, vec3 startPos = { 0, 0, 0 }, vec3 endPos = { 0, 0, 0 }) {
 
 		std::ifstream assembly(assemblyTxt);
@@ -160,7 +165,7 @@ public:
 
 	//PinCell* pinCells = nullptr;
 	Assembly* assembly = nullptr;
-	Assembly nullAssembly;
+	Assembly nullAssembly{};
 
 	int assemblyNo = 0;
 

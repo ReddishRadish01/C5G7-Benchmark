@@ -133,6 +133,18 @@ HD Pincell& Assembly::returnPincellByPos(Neutron& n) {
 	int yIdx = static_cast<int>(localAssemblyPos.y / cellSideLength);
 	int zIdx = static_cast<int>(localAssemblyPos.z / cellHeight);
 
+	/*
+	if (x >= this->xNum || y >= this->yNum || z >= this->zNum) {
+		printf("index [%d][%d][%d] out of bounds, neutron pos: (%f, %f, %f)\n", x, y, z, n.pos.x, n.pos.y, n.pos.z);
+		Pincell OOBPincell = Pincell(0, 0, 0);
+		printf("OOB Pincell returned\n");
+		return OOBPincell;
+		//return this->pinCells[0];
+	}
+
+	int index = z * (this->xNum * this->yNum) + (this->xNum * y) + x;
+	return this->pinCells[index];
+	*/
 	return this->returnPincellByIndex(xIdx, yIdx, zIdx);
 }
 
@@ -161,6 +173,12 @@ HD double Assembly::DTC(Neutron& n, XSLibrary* XSLib, GnuAMCM& RNG) {
 	Pincell currentPincell = this->returnPincellByPos(n);
 	vec3 pincellLocalPos = this->returnFlooredNeutronPosInPincell(n);
 	//MatType mat = currentPincell.meatOrMod(pincellLocalPos);
+	/*
+	if (currentPincell.sideLength == 0.0 && currentPincell.height == 0.0) {
+		n.Nullify();
+		return 1.0e+300;
+	}
+	*/
 	return currentPincell.DTC(pincellLocalPos, n, XSLib, RNG);
 }
 
