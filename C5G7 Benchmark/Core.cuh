@@ -21,7 +21,7 @@ public:
 		: sideLength(sideLength), radius(radius), height(height), meatType(meat), modType(mod), centerOffset(centerOffset)
 	{
 		// exceptions: if radius is bigger than sideLength / 2 ? remove it
-		if (2 * radius > sideLength) { radius = sideLength / 2.0; }
+		if (2 * radius > sideLength) { this->radius = sideLength / 2.0; }
 	}
 
 	HD MatType meatOrMod(vec3 pincellLocalPos) {
@@ -62,6 +62,7 @@ public:
 	int yNum = 0;
 	int zNum = 0;
 	Pincell* pinCells = nullptr;
+	Pincell OOBPincell;
 
 	H Assembly() = default;
 
@@ -114,6 +115,8 @@ public:
 		}
 
 		assembly.close();
+
+		OOBPincell = Pincell(0.0, 0.0, 0.0);
 	}
 	
 	H void Initialize_MOD(double cellSize, vec3 startPos = { 0, 0, 0 }, vec3 endPos = { 0, 0, 0 }, double cellHeight = 0.0) {
@@ -187,6 +190,8 @@ public:
 
 
 	HD Assembly& returnAssemblyByNeutron(Neutron& n) {
+
+		/*
 		double eps = 1.0e-15;
 		double x = n.dirVec.x > 0 ? eps : -eps;
 		double y = n.dirVec.y > 0 ? eps : -eps;
@@ -195,6 +200,7 @@ public:
 		//Neutron localN = n;
 		//localN.pos = localN.pos + epsVec;
 		//n.pos = n.pos + epsVec;
+		*/
 
 		for (int i = 0; i < this->assemblyNo; i++) {
 			vec3 endPos = this->assembly[i].startPos + this->assembly[i].length;
@@ -211,7 +217,7 @@ public:
 		// we are never meant to pass the out-of-bounds neutrons, or nullified neutrons in this function.
 		// we never want the code to flow into this far, in this function - idK why it ended up here, maybe put some debugger outputs just in case
 		printf("Neutron Out-Of-Bounds in Position: (%f, %f, %f)\n", n.pos.x, n.pos.y, n.pos.z);
-		n.Nullify();
+		//n.Nullify();
 		// return null assembly 
 		return this->nullAssembly;
 	}
@@ -304,7 +310,7 @@ public:
 			//fuelLayoutDebug(assemblyVec[i]);
 
 		} 
-		std::cout << "line size: " << lineNo - 2 << ", vector size: " << assemblyVec.size() << "\n";
+		//std::cout << "line size: " << lineNo - 2 << ", vector size: " << assemblyVec.size() << "\n";
 
 		
 		if (lineNo - 2 != assemblyVec.size()) {

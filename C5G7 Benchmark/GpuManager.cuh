@@ -4,7 +4,7 @@
 #include "XSParser.cuh"
 #include "Neutron.cuh"
 #include "Core.cuh"
-
+#include "Tally.cuh"
 #include <vector>
 #include <algorithm>
 
@@ -19,16 +19,98 @@ struct NeutronBankView {
 };
 
 class GPU_Manager {
-	//GPU_Manager() = default;
+    //GPU_Manager() = default;
 public:
 
-	// double pointer needed - or put MatXS*& d_ptr. I kept the double pointer so that it stays safe with CUDA style codes. 
-	H static void C5G7DeviceAllocater(XSLibrary** d_ptr, XSLibrary& h_instance) {
-		cudaMalloc(d_ptr, sizeof(h_instance));
-		cudaMemcpy(*d_ptr, &h_instance, sizeof(h_instance), cudaMemcpyHostToDevice);
-	}
-	// More: if the d_ptr is passed by MatXS* d_ptr, it is passed as value - it doesn't actually change the value(the address) of d_ptr.
-	// thus, you need to pass it as the pointer to pointer (MatXS**), or the reference to pointer (MatXS*&)
+    // double pointer needed - or put MatXS*& d_ptr. I kept the double pointer so that it stays safe with CUDA style codes. 
+    H static void XSLibDeviceAllocator(XSLibrary** d_ptr, XSLibrary& h_instance) {
+        cudaMalloc(d_ptr, sizeof(h_instance));
+        cudaMemcpy(*d_ptr, &h_instance, sizeof(h_instance), cudaMemcpyHostToDevice);
+    }
+    // More: if the d_ptr is passed by MatXS* d_ptr, it is passed as value - it doesn't actually change the value(the address) of d_ptr.
+    // thus, you need to pass it as the pointer to pointer (MatXS**), or the reference to pointer (MatXS*&)
+
+
+    H static C5G7Geometry* CoreDeviceAllocator(C5G7Geometry& h_Core, Assembly*& d_bufferAssembly, std::vector<Pincell*>& d_bufferPincellVec) {
+        // just to make sure these are clear
+        d_bufferAssembly = nullptr;
+        d_bufferPincellVec.clear();
+
+        C5G7Geometry* d_Core = nullptr;
+        int coreAssemblyNo = h_Core.assemblyNo;
+
+        cudaMalloc(&d_Core, sizeof(C5G7Geometry));
+        cudaMalloc(&d_bufferAssembly, sizeof(Assembly) * coreAssemblyNo);
+        d_bufferPincellVec.assign(coreAssemblyNo, nullptr);
+        std::vector<Assembly> tmp_Assembly(h_Core.assemblyNo);
+
+        for (int i = 0; i < d_bufferPincellVec.size(); i++) {
+            int n = h_Core.assembly[i].totalPincellNo();
+            cudaMalloc(&d_bufferPincellVec[i], sizeof(Pincell) * h_Core.assembly[i].totalPincellNo());
+            cudaMemcpy(d_bufferPincellVec[i], h_Core.assembly[i].pinCells, sizeof(Pincell) * n, cudaMemcpyHostToDevice);
+            tmp_Assembly[i] = h_Core.assembly[i];
+            tmp_Assembly[i].pinCells = d_bufferPincellVec[i];
+        }
+
+        cudaMemcpy(d_bufferAssembly, tmp_Assembly.data(), sizeof(Assembly) * h_Core.assemblyNo, cudaMemcpyHostToDevice);
+
+        C5G7Geometry tmp_Core = h_Core;
+        tmp_Core.assembly = d_bufferAssembly;
+
+        cudaMemcpy(d_Core, &tmp_Core, sizeof(C5G7Geometry), cudaMemcpyHostToDevice);
+
+        return d_Core;
+    }
+
+    H static TallyC5G7Geometry* CoreTallyDeviceAllocator(TallyC5G7Geometry& h_CoreTally, TallyAssembly*& d_bufferTallyAssembly, std::vector<TallyPincell*>& d_bufferTallyPincellVec) {
+        // just to make sure these are clear
+        d_bufferTallyAssembly = nullptr;
+        d_bufferTallyPincellVec.clear();
+
+        TallyC5G7Geometry* d_CoreTally = nullptr;
+        int coreAssemblyNo = h_CoreTally.assemblyNo;
+
+        cudaMalloc(&d_CoreTally, sizeof(TallyC5G7Geometry));
+        cudaMalloc(&d_bufferTallyAssembly, sizeof(TallyAssembly) * coreAssemblyNo);
+        d_bufferTallyPincellVec.assign(coreAssemblyNo, nullptr);
+        std::vector<TallyAssembly> tmp_Assembly(h_CoreTally.assemblyNo);
+
+        for (int i = 0; i < d_bufferTallyPincellVec.size(); i++) {
+            int n = h_CoreTally.tallyAssembly[i].totalPincellNo();
+            cudaMalloc(&d_bufferTallyPincellVec[i], sizeof(TallyPincell) * h_CoreTally.tallyAssembly[i].totalPincellNo());
+            cudaMemcpy(d_bufferTallyPincellVec[i], h_CoreTally.tallyAssembly[i].pinCells, sizeof(TallyPincell) * n, cudaMemcpyHostToDevice);
+            tmp_Assembly[i] = h_CoreTally.tallyAssembly[i];
+            tmp_Assembly[i].pinCells = d_bufferTallyPincellVec[i];
+        }
+
+        cudaMemcpy(d_bufferTallyAssembly, tmp_Assembly.data(), sizeof(TallyAssembly) * h_CoreTally.assemblyNo, cudaMemcpyHostToDevice);
+
+        TallyC5G7Geometry tmp_Core = h_CoreTally;
+        tmp_Core.tallyAssembly = d_bufferTallyAssembly;
+
+        cudaMemcpy(d_CoreTally, &tmp_Core, sizeof(TallyC5G7Geometry), cudaMemcpyHostToDevice);
+
+        return d_CoreTally;
+    }
+
+    H static inline void FetchCoreTallyToHost(TallyC5G7Geometry& h_CoreTally, TallyAssembly* d_bufferTallyAssembly, const std::vector<TallyPincell*>& d_bufferTallyPincellVec) {
+        const int A = h_CoreTally.assemblyNo;
+        cudaDeviceSynchronize();
+
+        if (static_cast<int>(d_bufferTallyPincellVec.size()) != A) {
+            throw std::runtime_error("d_bufferTallyPincellVec size mismatch with Host's assembly number!\n");
+        }
+
+        std::vector<TallyAssembly> tmpAsm(A);
+        cudaMemcpy(tmpAsm.data(), d_bufferTallyAssembly, sizeof(TallyAssembly) * A, cudaMemcpyDeviceToHost);
+
+        for (int i = 0; i < A; ++i) {
+            const int n = h_CoreTally.tallyAssembly[i].totalPincellNo();
+            cudaMemcpy(h_CoreTally.tallyAssembly[i].pinCells, d_bufferTallyPincellVec[i], sizeof(TallyPincell) * n, cudaMemcpyDeviceToHost);
+            h_CoreTally.tallyAssembly[i].OOBPincell = tmpAsm[i].OOBPincell;
+        }
+
+    }
 
 	
 

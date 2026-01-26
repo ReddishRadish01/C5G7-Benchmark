@@ -15,10 +15,12 @@
 //#define REFLECTIONDEBUG
 #define OUTBOUNDDEBUG
 
+#define TALLYINCYCLE
+
 constexpr double globaleps = 1.0e-10;
 
 
-G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLib, unsigned long long* seedNo, double* k_mult, bool passFlag) {
+G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geometry* CoreTally, XSLibrary* XSLib, unsigned long long* seedNo, double* k_mult, bool passFlag, int iterTimes) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (idx >= Bank->allocatableNeutronNum) {
@@ -26,12 +28,24 @@ G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLib, un
     }
     GnuAMCM RNG(seedNo[idx]);
 
-    double eps = 1.0e-10;
+    double eps = 5.0e-13;
 
     if (!Bank->neutrons[idx].isNullified()) {
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < iterTimes; i++) {
             //vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(localNeutron);
             Assembly currentAssembly = Core->returnAssemblyByNeutron(Bank->neutrons[idx]);
+            /*
+            if (currentAssembly.length.x == 0.0) {
+                Bank->neutrons[idx].Nullify();
+                atomicAdd(&(Bank->neutronSize), -1);
+                seedNo[idx] = RNG.gen();
+                return;
+            }
+            */
+#ifdef TALLYINCYCLE
+            TallyAssembly currentTallyAssembly = CoreTally->returnAssemblyByNeutron(Bank->neutrons[idx]);
+#endif
+            
             
             if (Bank->neutrons[idx].isNullified()) {
                 atomicAdd(&(Bank->neutronSize), -1);
@@ -43,6 +57,11 @@ G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLib, un
             }
             
             Pincell currentPincell = currentAssembly.returnPincellByPos(Bank->neutrons[idx]);
+            vec3 flooredNeutronPos = currentAssembly.returnFlooredNeutronPosInPincell(Bank->neutrons[idx]);
+#ifdef TALLYINCYCLE
+            TallyPincell currentTallyPincell = currentTallyAssembly.returnPincellByPos(Bank->neutrons[idx]);
+#endif
+            
             if (currentPincell.sideLength == 0.0 && currentPincell.height == 0.0) {
                 printf("error in returning pincell of neutron idx %d, - nullifying this neutron\n", idx);
                 Bank->neutrons[idx].Nullify();
@@ -56,15 +75,25 @@ G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLib, un
             double DTS = currentAssembly.DTS(Bank->neutrons[idx]);
 
             if (DTC < DTS) {    // reaction
+
                 Bank->neutrons[idx].updateWithLength(DTC);
-                vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(Bank->neutrons[idx]);
+                //vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(Bank->neutrons[idx]);
+#ifdef TALLYINCYCLE
+                if (currentPincell.meatOrMod(flooredNeutronPos) == MatType::MOD) { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->neutrons[idx]).modTally), DTC); }
+                else { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->neutrons[idx]).pinTally), DTC); }
+#endif
                 Interaction::reaction(Bank->neutrons[idx], Bank, XSLib, currentPincell, flooredNeutronPos, RNG, k_mult, passFlag, false);
                 seedNo[idx] = RNG.gen();
                 return;
             }
             else {  // do:  boundary check / reflection / position update to DTS and feed it back to main loop
                 //vec3 updatedPos = Bank->neutrons[idx].pos + Bank->neutrons[idx].dirVec * DTC;
+#ifdef TALLYINCYCLE
+                if (currentPincell.meatOrMod(flooredNeutronPos) == MatType::MOD) { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->neutrons[idx]).modTally), DTS); }
+                else { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->neutrons[idx]).pinTally), DTS); }
+#endif
                 vec3 updatedSurfacePos = Bank->neutrons[idx].pos + Bank->neutrons[idx].dirVec * DTS;
+
                 // handle vaccum boundary neutrons;
                 if (updatedSurfacePos.x >= Core->x - eps || updatedSurfacePos.y >= Core->y - eps || updatedSurfacePos.z >= Core->z - eps) {
                     Bank->neutrons[idx].Nullify();
@@ -83,12 +112,32 @@ G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLib, un
                     }
                     continue;
                 }
-                // neutron is inside the 
-                Bank->neutrons[idx].updateWithLength(DTS + eps);
+                // neutron is inside the core
+                Bank->neutrons[idx].updateWithLength(DTS + eps * 100);
+                
+                //Bank->neutrons[idx].dirVec.x >= 0 ? Bank->neutrons[idx].pos.x += globaleps : Bank->neutrons[idx].pos.x -= globaleps;
+                //Bank->neutrons[idx].dirVec.y >= 0 ? Bank->neutrons[idx].pos.y += globaleps : Bank->neutrons[idx].pos.y -= globaleps;
+                Bank->neutrons[idx].dirVec.z >= 0 ? Bank->neutrons[idx].pos.z += globaleps : Bank->neutrons[idx].pos.z -= globaleps;
+                // ¾ö¸¶¾ø´Â»õ³¢ ¾¾¹ß ÀÌ°Å Ãß°¡ÇÏ´Ï±î ¿°º´³ª´Âµ¥ ¹¹³Ä ¾¾¹ß·Ã
+                /*
+                vec3 epsVec = {
+                    (Bank->neutrons[idx].dirVec.x >= 0 ? +globaleps : -globaleps),
+                    (Bank->neutrons[idx].dirVec.y >= 0 ? +globaleps : -globaleps),
+                    (Bank->neutrons[idx].dirVec.z >= 0 ? +globaleps : -globaleps)
+                };
+                Bank->neutrons[idx].pos = Bank->neutrons[idx].pos + epsVec;
+                */
+                
             }
             //printf("idx %d neutron on %d loop\n", idx, i);
+
+            if (i >= iterTimes / 2) {
+                Bank->neutrons[idx].printInfo_Kernel(idx);
+            }
         }
-        //printf("idx %d neutron didn't reacted after 100 loops..?\n", idx);
+
+        
+        //printf("idx %d neutron didn't reacted after %d loops..?\n", idx, iterTimes);
         return;
 
     }
@@ -107,14 +156,14 @@ G void addedNeutronPassResetter(NeutronBank* Neutrons) {
 }
 
 
-G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLib, unsigned long long* seedNo, double* k_mult, bool passFlag) {
+G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geometry* CoreTally, XSLibrary* XSLib, unsigned long long* seedNo, double* k_mult, bool passFlag, int iterTimes) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (idx >= Bank->allocatableNeutronNum) {
         return;
     }
     GnuAMCM RNG(seedNo[idx]);
-    double eps = 1.0e-10;
+    double eps = 5.0e-13;
 
     if (!Bank->addedNeutrons[idx].isNullified()) {
         if (Bank->addedNeutrons[idx].passFlag) {
@@ -124,9 +173,21 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLi
     }
 
     if (!Bank->addedNeutrons[idx].isNullified()) {
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < iterTimes; i++) {
             //vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(localNeutron);
             Assembly currentAssembly = Core->returnAssemblyByNeutron(Bank->addedNeutrons[idx]);
+#ifdef TALLYINCYCLE
+            TallyAssembly currentTallyAssembly = CoreTally->returnAssemblyByNeutron(Bank->addedNeutrons[idx]);
+#endif
+            /*
+            if (currentAssembly.length.x == 0.0) {
+                Bank->addedNeutrons[idx].Nullify();
+                atomicAdd(&(Bank->addedNeutronSize), -1);
+                seedNo[idx] = RNG.gen();
+                return;
+            }
+            */
+
             if (Bank->addedNeutrons[idx].isNullified()) {
                 atomicAdd(&(Bank->addedNeutronSize), -1);
 #ifdef OUTBOUNDDEBUG
@@ -137,6 +198,7 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLi
             }
             
             Pincell currentPincell = currentAssembly.returnPincellByPos(Bank->addedNeutrons[idx]);
+            vec3 flooredAddedNeutronPos = currentAssembly.returnFlooredNeutronPosInPincell(Bank->addedNeutrons[idx]);
             
             if (currentPincell.sideLength == 0.0 && currentPincell.height == 0.0) {
                 printf("error in returning pincell of neutron idx %d, - nullifying this neutron\n", idx);
@@ -146,24 +208,29 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLi
                 return;
             }
             
-            
-
-
             double DTC = currentAssembly.DTC(Bank->addedNeutrons[idx], XSLib, RNG);
             double DTS = currentAssembly.DTS(Bank->addedNeutrons[idx]);
 
             if (DTC < DTS) {    // reaction
                 Bank->addedNeutrons[idx].updateWithLength(DTC);
-                vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(Bank->addedNeutrons[idx]);
-                Interaction::reaction(Bank->addedNeutrons[idx], Bank, XSLib, currentPincell, flooredNeutronPos, RNG, k_mult, passFlag, true);
+                //vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(Bank->addedNeutrons[idx]);
+#ifdef TALLYINCYCLE
+                if (currentPincell.meatOrMod(flooredAddedNeutronPos) == MatType::MOD) { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->addedNeutrons[idx]).modTally), DTC); }
+                else { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->addedNeutrons[idx]).pinTally), DTC); }
+#endif
+                Interaction::reaction(Bank->addedNeutrons[idx], Bank, XSLib, currentPincell, flooredAddedNeutronPos, RNG, k_mult, passFlag, true);
                 seedNo[idx] = RNG.gen();
                 return;
             }
             else {  // do:  boundary check / reflection / position update to DTS and feed it back to main loop
-                vec3 updatedPos = Bank->addedNeutrons[idx].pos + Bank->addedNeutrons[idx].dirVec * DTC;
+                //vec3 updatedPos = Bank->addedNeutrons[idx].pos + Bank->addedNeutrons[idx].dirVec * DTC;
+#ifdef TALLYINCYCLE
+                if (currentPincell.meatOrMod(flooredAddedNeutronPos) == MatType::MOD) { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->addedNeutrons[idx]).modTally), DTS); }
+                else { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->addedNeutrons[idx]).pinTally), DTS); }
+#endif
                 vec3 updatedSurfacePos = Bank->addedNeutrons[idx].pos + Bank->addedNeutrons[idx].dirVec * DTS;
                 // handle vaccum boundary neutrons;
-                if (updatedSurfacePos.x >= Core->x - eps || updatedSurfacePos.y >= Core->y - eps || updatedSurfacePos.z >= Core->z- eps) {
+                if (updatedSurfacePos.x >= Core->x - eps || updatedSurfacePos.y >= Core->y - eps || updatedSurfacePos.z >= Core->z - eps) {
                     Bank->addedNeutrons[idx].Nullify();
                     atomicAdd(&(Bank->addedNeutronSize), -1);
                     seedNo[idx] = RNG.gen();
@@ -180,11 +247,28 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLi
                     continue;
                 }
                 // neutron is inside the boundary.
-                Bank->addedNeutrons[idx].updateWithLength(DTS + eps);
+                Bank->addedNeutrons[idx].updateWithLength(DTS + eps * 100);
+                
+                //Bank->addedNeutrons[idx].dirVec.x >= 0 ? Bank->addedNeutrons[idx].pos.x += globaleps : Bank->addedNeutrons[idx].pos.x -= globaleps;
+                //Bank->addedNeutrons[idx].dirVec.y >= 0 ? Bank->addedNeutrons[idx].pos.y += globaleps : Bank->addedNeutrons[idx].pos.y -= globaleps;
+                Bank->addedNeutrons[idx].dirVec.z >= 0 ? Bank->addedNeutrons[idx].pos.z += globaleps : Bank->addedNeutrons[idx].pos.z -= globaleps;
+                /*
+                vec3 epsVec = {
+                    (Bank->addedNeutrons[idx].dirVec.x >= 0 ? +globaleps : -globaleps),
+                    (Bank->addedNeutrons[idx].dirVec.y >= 0 ? +globaleps : -globaleps),
+                    (Bank->addedNeutrons[idx].dirVec.z >= 0 ? +globaleps : -globaleps)
+                };
+                Bank->addedNeutrons[idx].pos = Bank->addedNeutrons[idx].pos + epsVec;
+                */
+                
             }
             //printf("idx %d neutron on %d loop\n", idx, i);
+
+            if (i >= iterTimes/2) {
+                Bank->addedNeutrons[idx].printInfo_Kernel(idx);
+            }
         }
-        //printf("idx %d neutron didn't reacted after 100 loops...?\n", idx);
+        //printf("idx %d neutron didn't reacted after %d loops..?\n", idx, iterTimes);
         return;
     }
     seedNo[idx] = RNG.gen();
@@ -193,82 +277,172 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLi
 
 }
 
-
-H void cycle_Neutron_CPU(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLib, unsigned long long* seedNo, double* k_mult, bool passFlag, double& absorption, double& fission, double& leak) {
+H void cycle_Neutron_CPU(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geometry* CoreTally, XSLibrary* XSLib, unsigned long long* seedNo, double* k_mult, bool passFlag, double& absorption, double& fission, double& leak) {
     for (int idx = 0; idx < Bank->allocatableNeutronNum; idx++) {
-
         GnuAMCM RNG(seedNo[idx]);
-        //Neutron localNeutron = Bank->neutrons[idx];
-        //double eps = 1.0e-15;
         double eps = globaleps;
 
-        if (!Bank->neutrons[idx].isNullified()) {
-            for (int i = 0; i < 100; i++) {
-                //vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(localNeutron);
-                Assembly currentAssembly = Core->returnAssemblyByNeutron(Bank->neutrons[idx]);
-                if (Bank->neutrons[idx].isNullified()) {
+        if (Bank->neutrons[idx].isNullified()) {
+            seedNo[idx] = RNG.gen();
+            continue;
+        }
+
+        for (int it = 0; it < 100; it++) {
+            Assembly currentAssembly = Core->returnAssemblyByNeutron(Bank->neutrons[idx]);
+
+            if (Bank->neutrons[idx].isNullified()) {
+                Bank->neutronSize -= 1;
+                seedNo[idx] = RNG.gen();
+                break;
+            }
+
+            Pincell currentPincell = currentAssembly.returnPincellByPos(Bank->neutrons[idx]);
+            vec3 flooredPos = currentAssembly.returnFlooredNeutronPosInPincell(Bank->neutrons[idx]);
+
+            if (currentPincell.sideLength == 0.0 && currentPincell.height == 0.0) {
+                Bank->neutrons[idx].Nullify();
+                Bank->neutronSize -= 1;
+                seedNo[idx] = RNG.gen();
+                break;
+            }
+
+            double DTC = currentAssembly.DTC(Bank->neutrons[idx], XSLib, RNG);
+            double DTS = currentAssembly.DTS(Bank->neutrons[idx]);
+
+            if (DTC < DTS) {
+                Bank->neutrons[idx].updateWithLength(DTC);
+
+                if (CoreTally) {
+                    TallyAssembly& TA = CoreTally->returnAssemblyByNeutron(Bank->neutrons[idx]);
+                    TallyPincell& TP = TA.returnPincellByPos(Bank->neutrons[idx]);
+                    if (currentPincell.meatOrMod(flooredPos) == MatType::MOD) TP.modTally += DTC;
+                    else TP.pinTally += DTC;
+                }
+
+                Interaction::reaction_CPU(idx, Bank->neutrons[idx], Bank, XSLib, currentPincell, flooredPos, RNG, k_mult, passFlag, false, absorption, fission);
+                seedNo[idx] = RNG.gen();
+                break;
+            }
+            else {
+                if (CoreTally) {
+                    TallyAssembly& TA = CoreTally->returnAssemblyByNeutron(Bank->neutrons[idx]);
+                    TallyPincell& TP = TA.returnPincellByPos(Bank->neutrons[idx]);
+                    if (currentPincell.meatOrMod(flooredPos) == MatType::MOD) TP.modTally += DTS;
+                    else TP.pinTally += DTS;
+                }
+
+                vec3 updatedSurfacePos = Bank->neutrons[idx].pos + Bank->neutrons[idx].dirVec * DTS;
+
+                if (updatedSurfacePos.x >= Core->x - eps || updatedSurfacePos.y >= Core->y - eps || updatedSurfacePos.z >= Core->z - eps) {
+                    Bank->neutrons[idx].Nullify();
                     Bank->neutronSize -= 1;
-#ifdef OUTBOUNDDEBUG
-                    printf("Neutron idx %d nullfied because Assembly positioning got fucked\n", idx);
-#endif
+                    leak += 1.0;
                     seedNo[idx] = RNG.gen();
                     break;
                 }
-                Pincell currentPincell = currentAssembly.returnPincellByPos(Bank->neutrons[idx]);
 
-                double DTC = currentAssembly.DTC(Bank->neutrons[idx], XSLib, RNG);
-                double DTS = currentAssembly.DTS(Bank->neutrons[idx]);
-
-                if (DTC < DTS) {    // reaction
-                    Bank->neutrons[idx].updateWithLength(DTC);
-                    vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(Bank->neutrons[idx]);
-                    Interaction::reaction_CPU(idx, Bank->neutrons[idx], Bank, XSLib, currentPincell, flooredNeutronPos, RNG, k_mult, passFlag, false, absorption, fission);
-                    seedNo[idx] = RNG.gen();
-                    break;
-                }
-                else {  // do:  boundary check / reflection / position update to DTS and feed it back to main loop
-                    vec3 updatedPos = Bank->neutrons[idx].pos + Bank->neutrons[idx].dirVec * DTC;
-                    vec3 updatedSurfacePos = Bank->neutrons[idx].pos + Bank->neutrons[idx].dirVec * DTS;
-                    // handle vaccum boundary neutrons;
-                    if (updatedSurfacePos.x >= Core->x - globaleps|| updatedSurfacePos.y >= Core->y - globaleps || updatedSurfacePos.z >= Core->z - globaleps * 10) {
-                        Bank->neutrons[idx].Nullify();
+                if (updatedSurfacePos.x <= eps || updatedSurfacePos.y <= eps || updatedSurfacePos.z <= eps) {
+                    Interaction::reflection_CPU(Bank->neutrons[idx], DTS, updatedSurfacePos, eps);
+                    if (Bank->neutrons[idx].isNullified()) {
                         Bank->neutronSize -= 1;
-                        leak++;
                         seedNo[idx] = RNG.gen();
                         break;
                     }
-                    if (updatedSurfacePos.x <= globaleps || updatedSurfacePos.y <= globaleps || updatedSurfacePos.z <= globaleps ) {
-#ifdef REFLECTIONDEBUG
-                        printf("neutron idx %d reflection condition: current Pos: (%f, %f, %f)\n", idx, Bank->neutrons[idx].pos.x, Bank->neutrons[idx].pos.y, Bank->neutrons[idx].pos.z);
-#endif
-                        Interaction::reflection_CPU(Bank->neutrons[idx], DTS, updatedSurfacePos, eps);
-                        if (Bank->neutrons[idx].isNullified()) {
-#ifdef REFLECTIONDEBUG
-                            printf("neutron idx %d nullified after Reflection: current Pos: (%f, %f, %f)\n", idx, Bank->neutrons[idx].pos.x, Bank->neutrons[idx].pos.y, Bank->neutrons[idx].pos.z);
-#endif
-                            // error handling - reflection might return a nullified neutron - thus reduce the size of neutron by 1.
-                            Bank->neutronSize -= 1;
-                            seedNo[idx] = RNG.gen();
-                            break;
-                        }
-                        // redundant? since reflection_CPU already bumps the value a little bit (eps * 1000 : larger than the boundary condition for updatedSurfacePos reflection).
-                        //Bank->neutrons[idx].pos = updatedSurfacePos + Bank->neutrons[idx].dirVec * globaleps;
-                        continue;
-                    }
-                    // neutron is inside the boundary.
-                    Bank->neutrons[idx].updateWithLength(DTS + globaleps);
+                    continue;
                 }
-#ifdef NEUTRONIDXDEBUG 
-                printf("idx %d Neutron on %d loop\n", idx, i);
-#endif
+
+                Bank->neutrons[idx].updateWithLength(DTS + eps);
             }
-            //printf("idx %d neutron didn't reacted after 100 loops..?\n", idx);
         }
-        else {
-#ifdef INTERACTIONDEBUG
-            printf("idx %d neutron already nullified\n", idx);
-#endif
+
+        seedNo[idx] = RNG.gen();
+    }
+}
+
+H void cycle_addedNeutron_CPU(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geometry* CoreTally, XSLibrary* XSLib, unsigned long long* seedNo, double* k_mult, bool passFlag, double& absorption, double& fission, double& leak) {
+    for (int idx = 0; idx < Bank->allocatableNeutronNum; idx++) {
+        GnuAMCM RNG(seedNo[idx]);
+        double eps = globaleps;
+
+        if (Bank->addedNeutrons[idx].isNullified()) {
+            seedNo[idx] = RNG.gen();
+            continue;
         }
+
+        if (Bank->addedNeutrons[idx].passFlag) {
+            Bank->addedNeutrons[idx].passFlag = false;
+            seedNo[idx] = RNG.gen();
+            continue;
+        }
+
+        for (int it = 0; it < 100; it++) {
+            Assembly currentAssembly = Core->returnAssemblyByNeutron(Bank->addedNeutrons[idx]);
+
+            if (Bank->addedNeutrons[idx].isNullified()) {
+                Bank->addedNeutronSize -= 1;
+                seedNo[idx] = RNG.gen();
+                break;
+            }
+
+            Pincell currentPincell = currentAssembly.returnPincellByPos(Bank->addedNeutrons[idx]);
+            vec3 flooredPos = currentAssembly.returnFlooredNeutronPosInPincell(Bank->addedNeutrons[idx]);
+
+            if (currentPincell.sideLength == 0.0 && currentPincell.height == 0.0) {
+                Bank->addedNeutrons[idx].Nullify();
+                Bank->addedNeutronSize -= 1;
+                seedNo[idx] = RNG.gen();
+                break;
+            }
+
+            double DTC = currentAssembly.DTC(Bank->addedNeutrons[idx], XSLib, RNG);
+            double DTS = currentAssembly.DTS(Bank->addedNeutrons[idx]);
+
+            if (DTC < DTS) {
+                Bank->addedNeutrons[idx].updateWithLength(DTC);
+
+                if (CoreTally) {
+                    TallyAssembly& TA = CoreTally->returnAssemblyByNeutron(Bank->addedNeutrons[idx]);
+                    TallyPincell& TP = TA.returnPincellByPos(Bank->addedNeutrons[idx]);
+                    if (currentPincell.meatOrMod(flooredPos) == MatType::MOD) TP.modTally += DTC;
+                    else TP.pinTally += DTC;
+                }
+
+                Interaction::reaction_CPU(idx, Bank->addedNeutrons[idx], Bank, XSLib, currentPincell, flooredPos, RNG, k_mult, passFlag, true, absorption, fission);
+                seedNo[idx] = RNG.gen();
+                break;
+            }
+            else {
+                if (CoreTally) {
+                    TallyAssembly& TA = CoreTally->returnAssemblyByNeutron(Bank->addedNeutrons[idx]);
+                    TallyPincell& TP = TA.returnPincellByPos(Bank->addedNeutrons[idx]);
+                    if (currentPincell.meatOrMod(flooredPos) == MatType::MOD) TP.modTally += DTS;
+                    else TP.pinTally += DTS;
+                }
+
+                vec3 updatedSurfacePos = Bank->addedNeutrons[idx].pos + Bank->addedNeutrons[idx].dirVec * DTS;
+
+                if (updatedSurfacePos.x >= Core->x - eps || updatedSurfacePos.y >= Core->y - eps || updatedSurfacePos.z >= Core->z - eps) {
+                    Bank->addedNeutrons[idx].Nullify();
+                    Bank->addedNeutronSize -= 1;
+                    leak += 1.0;
+                    seedNo[idx] = RNG.gen();
+                    break;
+                }
+
+                if (updatedSurfacePos.x <= eps || updatedSurfacePos.y <= eps || updatedSurfacePos.z <= eps) {
+                    Interaction::reflection_CPU(Bank->addedNeutrons[idx], DTS, updatedSurfacePos, eps);
+                    if (Bank->addedNeutrons[idx].isNullified()) {
+                        Bank->addedNeutronSize -= 1;
+                        seedNo[idx] = RNG.gen();
+                        break;
+                    }
+                    continue;
+                }
+
+                Bank->addedNeutrons[idx].updateWithLength(DTS + eps);
+            }
+        }
+
         seedNo[idx] = RNG.gen();
     }
 }
@@ -279,84 +453,4 @@ H void addedNeutronPassResetter_CPU(NeutronBank* Bank) {
             Bank->addedNeutrons[idx].passFlag = false;
         }
     }
-}
-
-H void cycle_addedNeutron_CPU(NeutronBank* Bank, C5G7Geometry* Core, XSLibrary* XSLib, unsigned long long* seedNo, double* k_mult, bool passFlag, double& absorption, double& fission, double& leak) {
-
-
-    for (int idx = 0; idx < Bank->allocatableNeutronNum; idx++) {
-        GnuAMCM RNG(seedNo[idx]);
-        //Neutron localNeutron = Bank->addedNeutrons[idx];
-        double eps = globaleps;
-
-        if (!Bank->addedNeutrons[idx].isNullified()) {
-            if (Bank->addedNeutrons[idx].passFlag) {
-                Bank->addedNeutrons[idx].passFlag = false;
-                continue;
-            }
-
-            for (int i = 0; i < 100; i++) {
-                //vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(localNeutron);
-                Assembly currentAssembly = Core->returnAssemblyByNeutron(Bank->addedNeutrons[idx]);
-                if (Bank->addedNeutrons[idx].isNullified()) {
-                    Bank->addedNeutronSize -= 1;
-#ifdef OUTBOUNDDEBUG
-                    printf("addedNeutron idx %d at iteration %d nullfied because Assembly positioning got fucked\n", idx, i);
-#endif
-                    seedNo[idx] = RNG.gen();
-                    break;
-                }
-                Pincell currentPincell = currentAssembly.returnPincellByPos(Bank->addedNeutrons[idx]);
-                if (currentPincell.sideLength == 0 && currentPincell.height == 0) {
-                    Bank->addedNeutrons[idx].Nullify();
-                    seedNo[idx] = RNG.gen();
-                    break;
-                }
-
-                double DTC = currentAssembly.DTC(Bank->addedNeutrons[idx], XSLib, RNG);
-                double DTS = currentAssembly.DTS(Bank->addedNeutrons[idx]);
-
-                if (DTC < DTS) {    // reaction
-                    Bank->addedNeutrons[idx].updateWithLength(DTC);
-                    vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(Bank->addedNeutrons[idx]);
-                    Interaction::reaction_CPU(idx, Bank->addedNeutrons[idx], Bank, XSLib, currentPincell, flooredNeutronPos, RNG, k_mult, passFlag, true, absorption, fission);
-                    seedNo[idx] = RNG.gen();
-                    break;
-                }
-                else {  // do:  boundary check / reflection / position update to DTS and feed it back to main loop
-                    vec3 updatedPos = Bank->addedNeutrons[idx].pos + Bank->addedNeutrons[idx].dirVec * DTC;
-                    vec3 updatedSurfacePos = Bank->addedNeutrons[idx].pos + Bank->addedNeutrons[idx].dirVec * DTS;
-                    // handle vaccum boundary neutrons;
-                    if (updatedSurfacePos.x >= Core->x - eps || updatedSurfacePos.y >= Core->y - eps || updatedSurfacePos.z >= Core->z - eps*10 ) {
-                        Bank->addedNeutrons[idx].Nullify();
-                        Bank->addedNeutronSize -= 1;
-                        leak++;
-                        seedNo[idx] = RNG.gen();
-                        break;
-                    }
-                    if (updatedSurfacePos.x <= globaleps || updatedSurfacePos.y <= globaleps || updatedSurfacePos.z <= globaleps) {
-                        Interaction::reflection_CPU(Bank->addedNeutrons[idx], DTS, updatedSurfacePos, eps);
-                        if (Bank->addedNeutrons[idx].isNullified()) {
-                            // error handling - reflection might return a nullified neutron - thus reduce the size of neutron by 1.
-                            Bank->addedNeutronSize -= 1;
-                            seedNo[idx] = RNG.gen();
-                            break;
-                        }
-                        // redundant? since reflection_CPU already bumps the value a little bit (eps * 1000).
-                        //Bank->addedNeutrons[idx].pos = updatedSurfacePos + Bank->neutrons[idx].dirVec * globaleps;
-                        continue;
-                    }
-                    // neutron is inside the boundary.
-                    // this +globaleps is for making sure that neutron pushes through the boundary
-                    Bank->addedNeutrons[idx].updateWithLength(DTS + globaleps);
-                }
-#ifdef NEUTRONIDXDEBUG 
-                printf("idx %d addedNeutron on %d loop\n", idx, i);
-#endif
-            }
-            //printf("idx %d neutron didn't reacted after 100 loops...?\n", idx);
-        }
-        seedNo[idx] = RNG.gen();
-    }
-
 }

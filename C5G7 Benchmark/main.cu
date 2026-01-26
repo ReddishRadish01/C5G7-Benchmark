@@ -14,18 +14,25 @@
 
 #include <iomanip>
 #include <ctime>
+#include <chrono>
 #include <sstream>
 
 //#define CPURUN
 #define GPURUN
+#define TALLY
 
 //#define XSRESULTDEBUG
 
 
 int main() {
-	int num = 200000;
-	int numCycle = 3000;
-	int inactiveCycle = 1000;
+	int num = 500000;
+	int numCycle = 3001;
+	int inactiveCycle = 1500;
+	int activeCycle = 2000;
+	numCycle = inactiveCycle + activeCycle + 1;
+	int iterLimit = 1000;
+
+	int tallyFetchCycleSpec = 200;
 
 	int threadPerBlock = 32;
 	int blockPerDim = (num + threadPerBlock - 1) / threadPerBlock;
@@ -33,13 +40,13 @@ int main() {
 	double h_multK = 0.0;
 	std::cout << "input the initial K muliplication factor:\n";
 	//std::cin >> h_multK;
-	h_multK = 1.1865;
+	h_multK = 1.00;
 
 	double* d_multK = nullptr;
 	cudaMalloc(&d_multK, sizeof(double));
 	cudaMemcpy(d_multK, &h_multK, sizeof(double), cudaMemcpyHostToDevice);
 
-	unsigned long long seedNo = 92235922381;
+	unsigned long long seedNo = 92235922383;
 
 	GnuAMCM h_RNG(seedNo);
 	unsigned long long* h_SeedArr = new unsigned long long[num];
@@ -78,36 +85,22 @@ int main() {
 	XSLibrary h_XSLib{};
 	MatXSFactory::initialize(h_XSLib, XS);
 	XSLibrary* d_XSLib = nullptr;
-	GPU_Manager::C5G7DeviceAllocater(&d_XSLib, h_XSLib);
+	GPU_Manager::XSLibDeviceAllocator(&d_XSLib, h_XSLib);
 
 
 	C5G7Geometry h_Core{};
 	C5G7GeometryFactory::Initialize(h_Core, "Geometry/C5G7CoreGeometry.txt", "Geometry/UO2Geometry.txt", "Geometry/MOXGeometry.txt");
-
-	C5G7Geometry* d_Core = nullptr;
-	cudaMalloc(&d_Core, sizeof(C5G7Geometry));
-	
-	// initialize vector with nullptr, number is given.
 	Assembly* d_bufferAssembly = nullptr;
-	cudaMalloc(&d_bufferAssembly, sizeof(Assembly) * h_Core.assemblyNo);
-
 	std::vector<Pincell*> d_bufferPincellVec(h_Core.assemblyNo, nullptr);
-	std::vector<Assembly> tmp_Assembly(h_Core.assemblyNo);
+	C5G7Geometry* d_Core = GPU_Manager::CoreDeviceAllocator(h_Core, d_bufferAssembly, d_bufferPincellVec);
 
-	for (int i = 0; i < d_bufferPincellVec.size(); i++) {
-		int n = h_Core.assembly[i].totalPincellNo();
-		cudaMalloc(&d_bufferPincellVec[i], sizeof(Pincell) * h_Core.assembly[i].totalPincellNo());
-		cudaMemcpy(d_bufferPincellVec[i], h_Core.assembly[i].pinCells, sizeof(Pincell) * n, cudaMemcpyHostToDevice);
-		tmp_Assembly[i] = h_Core.assembly[i];
-		tmp_Assembly[i].pinCells = d_bufferPincellVec[i];
-	}
-	
-	cudaMemcpy(d_bufferAssembly, tmp_Assembly.data(), sizeof(Assembly) * h_Core.assemblyNo, cudaMemcpyHostToDevice);
+	TallyC5G7Geometry h_CoreTally(h_Core);
+	TallyAssembly* d_bufferTallyAssembly = nullptr;
+	std::vector<TallyPincell*> d_bufferTallyPincellVec(h_CoreTally.assemblyNo, nullptr);
+	TallyC5G7Geometry* d_CoreTally = GPU_Manager::CoreTallyDeviceAllocator(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
 
-	C5G7Geometry tmp_Core = h_Core;
-	tmp_Core.assembly = d_bufferAssembly;
 
-	cudaMemcpy(d_Core, &tmp_Core, sizeof(C5G7Geometry), cudaMemcpyHostToDevice);
+
 
 	Neutron h_Neutron{ {4.0, 4.0, 200.0}, {0.0, 0.0, 0.0}, 1.0, 1.0 };
 	Neutron* d_Neutron = nullptr;
@@ -123,7 +116,18 @@ int main() {
 	std::tm tm = *std::localtime(&t);
 
 	std::ostringstream oss;
-	oss << "k_history_"
+	oss << "results/k_history_"
+		<< (tm.tm_year + 1900)
+		<< std::setw(2) << std::setfill('0') << (tm.tm_mon + 1)
+		<< std::setw(2) << std::setfill('0') << tm.tm_mday
+		<< "_"
+		<< std::setw(2) << std::setfill('0') << tm.tm_hour
+		<< std::setw(2) << std::setfill('0') << tm.tm_min
+		<< std::setw(2) << std::setfill('0') << tm.tm_sec
+		<< ".txt";
+
+	std::ostringstream oss2;
+	oss2 << "results/flux_Tally"
 		<< (tm.tm_year + 1900)
 		<< std::setw(2) << std::setfill('0') << (tm.tm_mon + 1)
 		<< std::setw(2) << std::setfill('0') << tm.tm_mday
@@ -135,6 +139,10 @@ int main() {
 
 	std::ofstream klog(oss.str(), std::ios::out);
 	klog << std::fixed << std::setprecision(6);
+
+	std::ofstream fluxTallyLog(oss2.str(), std::ios::out);
+	fluxTallyLog << std::fixed << std::setprecision(6);
+
 
 
 	for (int i = 0; i < h_Bank.neutronSize; i++) {
@@ -176,7 +184,9 @@ int main() {
 	int cycleNum = 0;
 	int activeCount = 0;
 
-	for (int i = 0; i < numCycle; i++) {
+	auto t_start = std::chrono::steady_clock::now();
+
+	for (int cycle = 0; cycle < numCycle; cycle++) {
 		cycleNum++;
 		double absorption = 0.0;
 		double fission = 0.0;
@@ -184,26 +194,28 @@ int main() {
 		double currentNumNeutron = h_Bank.getTotalNeutronNum();
 
 #ifdef CPURUN
-		cycle_addedNeutron_CPU(&h_Bank, &h_Core, &h_XSLib, h_SeedArr, &h_multK, true, absorption, fission, leak);
+		cycle_addedNeutron_CPU(&h_Bank, &h_Core, &h_CoreTally, &h_XSLib, h_SeedArr, &h_multK, true, absorption, fission, leak);
 		addedNeutronPassResetter_CPU(&h_Bank);
-		cycle_Neutron_CPU(&h_Bank, &h_Core, &h_XSLib, h_SeedArr, &h_multK, false, absorption, fission, leak);
+		cycle_Neutron_CPU(&h_Bank, &h_Core, &h_CoreTally, &h_XSLib, h_SeedArr, &h_multK, false, absorption, fission, leak);
 #endif
 		
 #ifdef GPURUN
-		cycle_addedNeutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, true);
+		cycle_addedNeutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_CoreTally, d_XSLib, d_SeedArr, d_multK, true, iterLimit);
 		//CUDA_KERNEL_CHECK();
 		addedNeutronPassResetter<<<blockPerDim, threadPerBlock>>>(d_Bank);
 		//CUDA_KERNEL_CHECK();
-		cycle_Neutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_XSLib, d_SeedArr, d_multK, false);
+		cycle_Neutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_CoreTally, d_XSLib, d_SeedArr, d_multK, false, iterLimit);
 		//CUDA_KERNEL_CHECK();
 
+		// this just fetches only the number of neutrons
 		cudaMemcpy(&h_Bank, d_Bank, sizeof(NeutronBank), cudaMemcpyDeviceToHost);
 		cudaMemcpy(&h_multK, d_multK, sizeof(double), cudaMemcpyDeviceToHost);
+
 #endif
 		
 		currentNumNeutron = h_Bank.getTotalNeutronNum();
 		double oldK = h_multK;
-		std::cout << "Cycle " << i + 1 << ", currentNum: " << currentNumNeutron;
+		std::cout << "Cycle " << cycle + 1 << ", currentNum: " << currentNumNeutron;
 		h_multK = h_multK * currentNumNeutron / previousNumNeutron;
 		previousNumNeutron = currentNumNeutron;
 		std::cout << "\tk: " << h_multK << "\n";
@@ -221,12 +233,40 @@ int main() {
 		}
 
 		cudaMemcpy(d_multK, &h_multK, sizeof(double), cudaMemcpyHostToDevice);
+
+
+#ifdef TALLY
+		//GPU_Manager::FetchCoreTallyToHost(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+
+		if (cycle == 1) {
+			std::cout << "Fetching info from core structure flux tally, cycle: " << cycle + 1 << "\n";
+			GPU_Manager::FetchCoreTallyToHost(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+			// fetch the tally
+			DumpCoreTallyToText(h_CoreTally, fluxTallyLog, cycle, 10, h_multK);
+		}
+
+		if (cycle % tallyFetchCycleSpec == 0 && cycle != 0) {
+			std::cout << "Fetching info from core structure flux tally, cycle: " << cycle << "\n";
+			GPU_Manager::FetchCoreTallyToHost(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+			// fetch the tally
+			DumpCoreTallyToText(h_CoreTally, fluxTallyLog, cycle, 10, h_multK);
+		}
+		if (cycle % tallyFetchCycleSpec - 1 == 0) {
+			ResetCoreTallyOnDevice(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+		}
+		if (cycle == 0) {
+			ResetCoreTallyOnDevice(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+		}
+#endif
+
+
+
 #ifdef CPURUN
 		std::cout << "  capture: " << absorption << " , fission neutron num: " << fission << ", leak: " << leak << "\n";
 #endif
 
-		klog << (i + 1) << " " << h_multK << "\n";
-		if (i > inactiveCycle) {
+		klog << (cycle + 1) << " " << h_multK << "\n";
+		if (cycle > inactiveCycle) {
 			activeCount += 1;
 			double x = h_multK;
 			double delta = x - meanK;
@@ -248,6 +288,7 @@ int main() {
 					NeutronContainer.emplace_back(h_Bank.neutrons[j]);
 					h_Bank.neutrons[j].Nullify();	// flush all the old neutrons
 				}
+
 				if (!h_Bank.addedNeutrons[j].isNullified()) {
 					NeutronContainer.reserve(1);
 					h_Bank.addedNeutrons[j].passFlag = false;
@@ -291,6 +332,10 @@ int main() {
 #endif
 		
 	}
+	auto t_end = std::chrono::steady_clock::now();
+	std::chrono::duration<double> elapsed = t_end - t_start;
+
+	std::cout << "Total Time: " << elapsed.count() << "seconds. Average: " << elapsed.count() / cycleNum << " seconds per cycle.\n";
 
 	if (activeCount >= 2) {
 		double var = M2 / (activeCount - 1);
@@ -298,15 +343,22 @@ int main() {
 		double stderr_mean = stddev / std::sqrt(static_cast<double>(activeCount));
 
 		std::cout << "\n\nActive cycles: " << activeCount << "\n";
-		std::cout << "k_mean: " << meanK << "\n";
+		std::cout << "k_mean: " << std::fixed << std::setprecision(7) << meanK << "\n";
 		std::cout << "k_stddev(cycle): " << stddev << "\n";
 		std::cout << "k_stderr(mean): " << stderr_mean << "\n";
+
+		klog << "\n\nActive cycles: " << activeCount << "\n";
+		klog << "k_mean: " << meanK << "\n";
+		klog << "k_stddev(cycle): " << stddev << "\n";
+		klog << "k_stderr(mean): " << stderr_mean << "\n";
+	
 	}
 
 
 	//std::cout << "\n initial Neutron number: " << num << ", for cycle of " << cycleNum - inactiveCycle << ", average k = " << meanK << "\n";
 
 	klog.close();
+	fluxTallyLog.close();
 
 	delete[] h_SeedArr;
 	h_SeedArr = nullptr;
@@ -321,10 +373,17 @@ int main() {
 		if (p) cudaFree(p);
 		p = nullptr;
 	}
+
+	for (auto& p : d_bufferTallyPincellVec) {
+		if (p) cudaFree(p);
+		p = nullptr;
+	}
+
 	if (d_bufferAssembly) cudaFree(d_bufferAssembly);
+	if (d_bufferTallyAssembly) cudaFree(d_bufferTallyAssembly);
 
 	if (d_Core) cudaFree(d_Core);
-
+	if (d_CoreTally) cudaFree(d_CoreTally);
 	if (d_XSLib) cudaFree(d_XSLib);
 
 	if (d_SeedArr) cudaFree(d_SeedArr);

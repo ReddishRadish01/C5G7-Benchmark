@@ -62,7 +62,7 @@ HD double Pincell::DTS(vec3 localPos, Neutron& n) {
 	// quadratic formula: since D^2 =1 (since normalized), t = OD \pm \sqrt{ (OD)^2 - O^2 + R^2 }
 	// note that this only applies when the radius is not zero: for moderator blocks we should exclude this.
 	double distanceToPin = 1.0e300;
-	if (this->radius > epsT * 1000) {
+	if (this->radius > epsT) {
 		vec3 localCenter = { this->sideLength / 2.0 + this->centerOffset.x, this->sideLength / 2.0 + this->centerOffset.y, this->height / 2.0 };
 		localPos = localPos - localCenter;
 
@@ -97,6 +97,9 @@ HD double Pincell::DTS(vec3 localPos, Neutron& n) {
 	//return distanceToWall;
 }
 
+HD int Assembly::totalPincellNo() {
+	return this->xNum * this->yNum * this->zNum;
+}
 
 HD Pincell& Assembly::returnPincellByIndex(int x, int y, int z) {
 	if (x >= this->xNum || y >= this->yNum || z >= this->zNum) {
@@ -111,41 +114,43 @@ HD Pincell& Assembly::returnPincellByIndex(int x, int y, int z) {
 	return this->pinCells[index];
 }
 
-HD int Assembly::totalPincellNo() {
-	return this->xNum * this->yNum * this->zNum;
-}
-
 HD Pincell& Assembly::returnPincellByPos(Neutron& n) {
 	vec3 localAssemblyPos = n.pos - this->startPos;
-
+	
 	double eps = 1.0e-14;
+	
 	double x = n.dirVec.x > 0 ? eps : -eps;
 	double y = n.dirVec.y > 0 ? eps : -eps;
 	double z = n.dirVec.z > 0 ? eps : -eps;
+	
 	vec3 epsVec = { x, y, z };
+	
 	localAssemblyPos = localAssemblyPos + epsVec;
-
+		
 	//n.pos = n.pos + epsVec;
-
+	
 	double cellSideLength = this->pinCells[0].sideLength;
 	double cellHeight = this->pinCells[0].height;
-	int xIdx = static_cast<int>(localAssemblyPos.x / cellSideLength);
-	int yIdx = static_cast<int>(localAssemblyPos.y / cellSideLength);
-	int zIdx = static_cast<int>(localAssemblyPos.z / cellHeight);
+	int xIdx = static_cast<int>((localAssemblyPos.x ) / cellSideLength);
+	int yIdx = static_cast<int>((localAssemblyPos.y ) / cellSideLength);
+	int zIdx = static_cast<int>((localAssemblyPos.z ) / cellHeight);
 
-	/*
-	if (x >= this->xNum || y >= this->yNum || z >= this->zNum) {
-		printf("index [%d][%d][%d] out of bounds, neutron pos: (%f, %f, %f)\n", x, y, z, n.pos.x, n.pos.y, n.pos.z);
-		Pincell OOBPincell = Pincell(0, 0, 0);
+	if (xIdx == this->xNum || yIdx == this->yNum || zIdx == this->zNum) {
+		
+	}
+	
+	if (xIdx >= this->xNum || yIdx >= this->yNum || zIdx >= this->zNum) {
+		printf("index [%d][%d][%d] out of bounds, neutron pos: (%f, %f, %f)\n", xIdx, yIdx, zIdx, n.pos.x, n.pos.y, n.pos.z);
+		
 		printf("OOB Pincell returned\n");
-		return OOBPincell;
+		return this->OOBPincell;
 		//return this->pinCells[0];
 	}
 
-	int index = z * (this->xNum * this->yNum) + (this->xNum * y) + x;
+	int index = zIdx * (this->xNum * this->yNum) + (this->xNum * yIdx) + xIdx;
 	return this->pinCells[index];
-	*/
-	return this->returnPincellByIndex(xIdx, yIdx, zIdx);
+	
+	//return this->returnPincellByIndex(xIdx, yIdx, zIdx);
 }
 
 HD vec3 Assembly::returnFlooredNeutronPosInPincell(Neutron& n) {
