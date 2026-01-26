@@ -125,7 +125,7 @@ HD Pincell& Assembly::returnPincellByPos(Neutron& n) {
 	
 	vec3 epsVec = { x, y, z };
 	
-	localAssemblyPos = localAssemblyPos + epsVec;
+	//localAssemblyPos = localAssemblyPos + epsVec;
 		
 	//n.pos = n.pos + epsVec;
 	

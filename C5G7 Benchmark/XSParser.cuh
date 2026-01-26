@@ -147,7 +147,7 @@ struct MatXS {
 		
 		// this below is to compensate for 10^{-5} degress of bias in transXS compared when every other XS is added up.
 		// we force the transXS to be the sum of other XS.
-		//if 
+		
 		
 		
 		for (int g = 0; g < 7; g++) {
@@ -156,6 +156,7 @@ struct MatXS {
 				transXS[g] += elsXS[g][i];
 			}
 		}
+		
 		
 		
 		

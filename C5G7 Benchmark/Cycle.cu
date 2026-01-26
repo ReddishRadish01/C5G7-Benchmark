@@ -17,6 +17,7 @@
 
 #define TALLYINCYCLE
 
+
 constexpr double globaleps = 1.0e-10;
 
 
@@ -28,8 +29,8 @@ G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geometry* C
     }
     GnuAMCM RNG(seedNo[idx]);
 
-    double eps = 5.0e-13;
-
+    double eps = 1.0e-13;
+    int reflectionCounter = 0;
     if (!Bank->neutrons[idx].isNullified()) {
         for (int i = 0; i < iterTimes; i++) {
             //vec3 flooredNeutronPos = Core->assembly->returnFlooredNeutronPosInPincell(localNeutron);
@@ -63,6 +64,13 @@ G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geometry* C
 #endif
             
             if (currentPincell.sideLength == 0.0 && currentPincell.height == 0.0) {
+                // on-surface exceptions - bump it into other cell, and continue
+                if ((Bank->neutrons[idx].pos.x >= currentAssembly.startPos.x + currentAssembly.length.x - eps * 100) && (Bank->neutrons[idx].pos.x <= currentAssembly.startPos.x + currentAssembly.length.x + eps * 100) ||
+                    (Bank->neutrons[idx].pos.y >= currentAssembly.startPos.y + currentAssembly.length.y - eps * 100) && (Bank->neutrons[idx].pos.y <= currentAssembly.startPos.y + currentAssembly.length.y + eps * 100) ||
+                    (Bank->neutrons[idx].pos.z >= currentAssembly.startPos.z + currentAssembly.length.z - eps * 100) && (Bank->neutrons[idx].pos.z <= currentAssembly.startPos.z + currentAssembly.length.z + eps * 100) ) {
+                    Bank->neutrons[idx].updateWithLength(eps * 10000);
+                    continue;
+                }
                 printf("error in returning pincell of neutron idx %d, - nullifying this neutron\n", idx);
                 Bank->neutrons[idx].Nullify();
                 atomicAdd(&(Bank->neutronSize), -1);
@@ -93,31 +101,42 @@ G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geometry* C
                 else { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->neutrons[idx]).pinTally), DTS); }
 #endif
                 vec3 updatedSurfacePos = Bank->neutrons[idx].pos + Bank->neutrons[idx].dirVec * DTS;
-
+                vec3 afterDTCPos = Bank->neutrons[idx].pos + Bank->neutrons[idx].dirVec * DTC;
                 // handle vaccum boundary neutrons;
-                if (updatedSurfacePos.x >= Core->x - eps || updatedSurfacePos.y >= Core->y - eps || updatedSurfacePos.z >= Core->z - eps) {
+                if (updatedSurfacePos.x >= Core->x  || updatedSurfacePos.y >= Core->y  || updatedSurfacePos.z >= Core->z) {
                     Bank->neutrons[idx].Nullify();
                     atomicAdd(&(Bank->neutronSize), -1);
                     seedNo[idx] = RNG.gen();
                     return;
                 }
-                if (updatedSurfacePos.x <= eps || updatedSurfacePos.y <= eps || updatedSurfacePos.z <= eps ) {
-                    Interaction::reflection(Bank->neutrons[idx], DTS, updatedSurfacePos, eps);
-                    // this reflection already bumps the neutron to the surface location, with some room for error
-                    if (Bank->neutrons[idx].isNullified()) {
-                        // error handling - reflection might return a nullified neutron - thus reduce the size of neutron by 1.
-                        atomicAdd(&(Bank->neutronSize), -1);
-                        seedNo[idx] = RNG.gen();
-                        return;
+                if (afterDTCPos.x < 0.0 || afterDTCPos.y < 0.0  || afterDTCPos.z < 0.0) {
+                    if (updatedSurfacePos.x <= eps/100 || updatedSurfacePos.y <= eps/100 || updatedSurfacePos.z <= eps/100 ) {
+
+                        Interaction::reflection(Bank->neutrons[idx], DTS, updatedSurfacePos, eps);
+#ifdef REFLECTIONDEBUG
+                        reflectionCounter++;
+                        if (reflectionCounter > 1) {
+                            printf("Neutron reflected twice on ");
+                            Bank->neutrons[idx].printInfo_Kernel(idx);
+                        }
+#endif
+                        // this reflection already bumps the neutron to the surface location, with some room for error
+                        if (Bank->neutrons[idx].isNullified()) {
+                            // error handling - reflection might return a nullified neutron - thus reduce the size of neutron by 1.
+                            atomicAdd(&(Bank->neutronSize), -1);
+                            seedNo[idx] = RNG.gen();
+                            return;
+                        }
+                        continue;
                     }
-                    continue;
                 }
                 // neutron is inside the core
-                Bank->neutrons[idx].updateWithLength(DTS + eps * 100);
+                Bank->neutrons[idx].updateWithLength(DTS + eps * 1000);
+                //Bank->neutrons[idx].updateWithLength(DTS);
                 
                 //Bank->neutrons[idx].dirVec.x >= 0 ? Bank->neutrons[idx].pos.x += globaleps : Bank->neutrons[idx].pos.x -= globaleps;
                 //Bank->neutrons[idx].dirVec.y >= 0 ? Bank->neutrons[idx].pos.y += globaleps : Bank->neutrons[idx].pos.y -= globaleps;
-                Bank->neutrons[idx].dirVec.z >= 0 ? Bank->neutrons[idx].pos.z += globaleps : Bank->neutrons[idx].pos.z -= globaleps;
+                //Bank->neutrons[idx].dirVec.z >= 0 ? Bank->neutrons[idx].pos.z += globaleps : Bank->neutrons[idx].pos.z -= globaleps;
                 // ¾ö¸¶¾ø´Â»õ³¢ ¾¾¹ß ÀÌ°Å Ãß°¡ÇÏ´Ï±î ¿°º´³ª´Âµ¥ ¹¹³Ä ¾¾¹ß·Ã
                 /*
                 vec3 epsVec = {
@@ -131,13 +150,16 @@ G void cycle_Neutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geometry* C
             }
             //printf("idx %d neutron on %d loop\n", idx, i);
 
-            if (i >= iterTimes / 2) {
+            if (i == iterTimes - 1) {
                 Bank->neutrons[idx].printInfo_Kernel(idx);
+                Bank->neutrons[idx].Nullify();
+                atomicAdd(&(Bank->neutronSize), -1);
             }
         }
 
         
         //printf("idx %d neutron didn't reacted after %d loops..?\n", idx, iterTimes);
+        seedNo[idx] = RNG.gen();
         return;
 
     }
@@ -163,7 +185,8 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geomet
         return;
     }
     GnuAMCM RNG(seedNo[idx]);
-    double eps = 5.0e-13;
+    double eps = 1.0e-13;
+    int reflectionCounter = 0;
 
     if (!Bank->addedNeutrons[idx].isNullified()) {
         if (Bank->addedNeutrons[idx].passFlag) {
@@ -201,7 +224,15 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geomet
             vec3 flooredAddedNeutronPos = currentAssembly.returnFlooredNeutronPosInPincell(Bank->addedNeutrons[idx]);
             
             if (currentPincell.sideLength == 0.0 && currentPincell.height == 0.0) {
-                printf("error in returning pincell of neutron idx %d, - nullifying this neutron\n", idx);
+                if ((Bank->addedNeutrons[idx].pos.x >= currentAssembly.startPos.x + currentAssembly.length.x - eps * 100) && (Bank->addedNeutrons[idx].pos.x <= currentAssembly.startPos.x + currentAssembly.length.x + eps * 100) ||
+                    (Bank->addedNeutrons[idx].pos.y >= currentAssembly.startPos.y + currentAssembly.length.y - eps * 100) && (Bank->addedNeutrons[idx].pos.y <= currentAssembly.startPos.y + currentAssembly.length.y + eps * 100) ||
+                    (Bank->addedNeutrons[idx].pos.z >= currentAssembly.startPos.z + currentAssembly.length.z - eps * 100) && (Bank->addedNeutrons[idx].pos.z <= currentAssembly.startPos.z + currentAssembly.length.z + eps * 100)) {
+                    Bank->addedNeutrons[idx].updateWithLength(eps * 10000);
+                    continue;
+                }
+
+
+                printf("error in returning pincell of adddedNeutron idx %d, - nullifying this neutron\n", idx);
                 Bank->addedNeutrons[idx].Nullify();
                 atomicAdd(&(Bank->addedNeutronSize), -1);
                 seedNo[idx] = RNG.gen();
@@ -229,29 +260,40 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geomet
                 else { atomicAdd(&(currentTallyAssembly.returnPincellByPos(Bank->addedNeutrons[idx]).pinTally), DTS); }
 #endif
                 vec3 updatedSurfacePos = Bank->addedNeutrons[idx].pos + Bank->addedNeutrons[idx].dirVec * DTS;
+                vec3 afterDTCPos = Bank->addedNeutrons[idx].pos + Bank->addedNeutrons[idx].dirVec * DTC;
                 // handle vaccum boundary neutrons;
-                if (updatedSurfacePos.x >= Core->x - eps || updatedSurfacePos.y >= Core->y - eps || updatedSurfacePos.z >= Core->z - eps) {
+
+                if (updatedSurfacePos.x >= Core->x  || updatedSurfacePos.y >= Core->y || updatedSurfacePos.z >= Core->z) {
                     Bank->addedNeutrons[idx].Nullify();
                     atomicAdd(&(Bank->addedNeutronSize), -1);
                     seedNo[idx] = RNG.gen();
                     return;
                 }
-                if (updatedSurfacePos.x <= eps || updatedSurfacePos.y <= eps || updatedSurfacePos.z <= eps) {
-                    Interaction::reflection(Bank->addedNeutrons[idx], DTS, updatedSurfacePos, eps);
-                    if (Bank->addedNeutrons[idx].isNullified()) {
-                        // error handling - reflection might return a nullified neutron - thus reduce the size of neutron by 1.
-                        atomicAdd(&(Bank->addedNeutronSize), -1);
-                        seedNo[idx] = RNG.gen();
-                        return;
+
+                if (afterDTCPos.x < 0.0 || afterDTCPos.y < 0.0 || afterDTCPos.z < 0.0) {
+                    if (updatedSurfacePos.x <= eps / 10 || updatedSurfacePos.y <= eps / 10 || updatedSurfacePos.z <= eps / 10 ) {
+                        Interaction::reflection(Bank->addedNeutrons[idx], DTS, updatedSurfacePos, eps);
+#ifdef REFLECTIONDEBUG
+                        if (reflectionCounter > 1) {
+                            printf("Neutron reflected twice on ");
+                            Bank->addedNeutrons[idx].printInfo_Kernel(idx);
+                        }
+#endif
+                        if (Bank->addedNeutrons[idx].isNullified()) {
+                            // error handling - reflection might return a nullified neutron - thus reduce the size of neutron by 1.
+                            atomicAdd(&(Bank->addedNeutronSize), -1);
+                            seedNo[idx] = RNG.gen();
+                            return;
+                        }
+                        continue;
                     }
-                    continue;
                 }
                 // neutron is inside the boundary.
-                Bank->addedNeutrons[idx].updateWithLength(DTS + eps * 100);
+                Bank->addedNeutrons[idx].updateWithLength(DTS + eps * 1000);
                 
                 //Bank->addedNeutrons[idx].dirVec.x >= 0 ? Bank->addedNeutrons[idx].pos.x += globaleps : Bank->addedNeutrons[idx].pos.x -= globaleps;
                 //Bank->addedNeutrons[idx].dirVec.y >= 0 ? Bank->addedNeutrons[idx].pos.y += globaleps : Bank->addedNeutrons[idx].pos.y -= globaleps;
-                Bank->addedNeutrons[idx].dirVec.z >= 0 ? Bank->addedNeutrons[idx].pos.z += globaleps : Bank->addedNeutrons[idx].pos.z -= globaleps;
+                //Bank->addedNeutrons[idx].dirVec.z >= 0 ? Bank->addedNeutrons[idx].pos.z += globaleps : Bank->addedNeutrons[idx].pos.z -= globaleps;
                 /*
                 vec3 epsVec = {
                     (Bank->addedNeutrons[idx].dirVec.x >= 0 ? +globaleps : -globaleps),
@@ -264,11 +306,14 @@ G void cycle_addedNeutron(NeutronBank* Bank, C5G7Geometry* Core, TallyC5G7Geomet
             }
             //printf("idx %d neutron on %d loop\n", idx, i);
 
-            if (i >= iterTimes/2) {
+            if (i == iterTimes - 1) {
                 Bank->addedNeutrons[idx].printInfo_Kernel(idx);
+                Bank->addedNeutrons[idx].Nullify();
+                atomicAdd(&(Bank->addedNeutronSize), -1);
             }
         }
         //printf("idx %d neutron didn't reacted after %d loops..?\n", idx, iterTimes);
+        seedNo[idx] = RNG.gen();
         return;
     }
     seedNo[idx] = RNG.gen();

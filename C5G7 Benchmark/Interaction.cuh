@@ -88,7 +88,7 @@ public:
 
 		vec3 collisionPos = n.pos + n.dirVec * DTS;
 		vec3 reflectVec = n.dirVec - reflectNormal * 2 * n.dirVec.dot(reflectNormal);
-		collisionPos = collisionPos + reflectVec * eps * 100;
+		collisionPos = collisionPos + reflectVec * eps * 1000;
 
 		n.pos = collisionPos;
 		n.dirVec = reflectVec;

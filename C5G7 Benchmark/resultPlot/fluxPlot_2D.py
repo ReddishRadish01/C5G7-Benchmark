@@ -181,7 +181,7 @@ def plot_cycle_k(
             values.append(mod)
 
     vmax = max(values) if values else 1.0
-    norm = make_shared_norm(values, mode="percentile", p_lo=1.0, p_hi=99.0, log=False)
+    norm = make_shared_norm(values, mode="percentile", p_lo=0.0, p_hi=99.9, log=False)
 
     fig, ax = plt.subplots(figsize=(9, 9))
 
@@ -231,7 +231,7 @@ def plot_cycle_k(
     ax.set_xlabel("x (cm)")
     ax.set_ylabel("y (cm)")
 
-    title = f"Cycle {cycle.cycle_no}, k-slice={k_slice}"
+    title = f"Cycle {cycle.cycle_no}, z Pos={1.26 * (k_slice + 1)} (cm)"
     if cycle.keff is not None:
         title += f", keff={cycle.keff:.6f}"
     ax.set_title(title)
@@ -281,4 +281,4 @@ def make_all_plots(
 if __name__ == "__main__":
     # Example:
     # make_all_plots("flux_Tally20260126_182315.txt", out_dir="plots")
-    make_all_plots("flux_Tally20260126_234141.txt", out_dir="plots")
+    make_all_plots("flux_Tally20260127_030612.txt", out_dir="plots")

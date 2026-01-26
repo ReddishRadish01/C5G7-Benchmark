@@ -19,16 +19,18 @@
 
 //#define CPURUN
 #define GPURUN
-#define TALLY
+//#define TALLY
 
 //#define XSRESULTDEBUG
+
+#define TALLYWHOLECYCLE
 
 
 int main() {
 	int num = 500000;
-	int numCycle = 3001;
+	int numCycle = 3301;
 	int inactiveCycle = 1500;
-	int activeCycle = 2000;
+	int activeCycle = 2400;
 	numCycle = inactiveCycle + activeCycle + 1;
 	int iterLimit = 1000;
 
@@ -200,6 +202,7 @@ int main() {
 #endif
 		
 #ifdef GPURUN
+		//ResetCoreTallyOnDevice(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
 		cycle_addedNeutron << <blockPerDim, threadPerBlock >> > (d_Bank, d_Core, d_CoreTally, d_XSLib, d_SeedArr, d_multK, true, iterLimit);
 		//CUDA_KERNEL_CHECK();
 		addedNeutronPassResetter<<<blockPerDim, threadPerBlock>>>(d_Bank);
@@ -235,28 +238,66 @@ int main() {
 		cudaMemcpy(d_multK, &h_multK, sizeof(double), cudaMemcpyHostToDevice);
 
 
+
+#ifdef TALLYWHOLECYCLE
+		if (cycle == inactiveCycle + 1) {
+			// marks the start of the tally fetch:
+			ResetCoreTallyOnDevice(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+			// this version will fetch the tally, at the last cycle (sum of the tally)
+		}
+#endif
+
+
+
+
 #ifdef TALLY
 		//GPU_Manager::FetchCoreTallyToHost(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+
+
+		if (cycle > 180 && cycle < 199) {
+			
+			if (cycle % 2 == 0) {
+				std::cout << "Fetching info from core structure flux tally, cycle: " << cycle + 1 << "\n";
+				GPU_Manager::FetchCoreTallyToHost(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+				DumpCoreTallyToText(h_CoreTally, fluxTallyLog, cycle + 1, 10, h_multK);
+			}
+			ResetCoreTallyOnDevice(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+		}
+
 
 		if (cycle == 1) {
 			std::cout << "Fetching info from core structure flux tally, cycle: " << cycle + 1 << "\n";
 			GPU_Manager::FetchCoreTallyToHost(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
 			// fetch the tally
-			DumpCoreTallyToText(h_CoreTally, fluxTallyLog, cycle, 10, h_multK);
+			DumpCoreTallyToText(h_CoreTally, fluxTallyLog, cycle+1, 10, h_multK);
 		}
 
 		if (cycle % tallyFetchCycleSpec == 0 && cycle != 0) {
 			std::cout << "Fetching info from core structure flux tally, cycle: " << cycle << "\n";
 			GPU_Manager::FetchCoreTallyToHost(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
 			// fetch the tally
-			DumpCoreTallyToText(h_CoreTally, fluxTallyLog, cycle, 10, h_multK);
+			DumpCoreTallyToText(h_CoreTally, fluxTallyLog, cycle+1, 10, h_multK);
 		}
+
+		if (cycle % 20 == 0 && cycle < 199) {
+			std::cout << "Fetching info from core structure flux tally, cycle: " << cycle + 1 << "\n";
+			GPU_Manager::FetchCoreTallyToHost(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+			// fetch the tally
+			DumpCoreTallyToText(h_CoreTally, fluxTallyLog, cycle + 1, 10, h_multK);
+		}
+		
 		if (cycle % tallyFetchCycleSpec - 1 == 0) {
 			ResetCoreTallyOnDevice(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
 		}
 		if (cycle == 0) {
 			ResetCoreTallyOnDevice(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
 		}
+
+		if ((cycle + 1) % 20 == 0 && cycle + 1 < 199) {
+			ResetCoreTallyOnDevice(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+		}
+		
+
 #endif
 
 
@@ -353,6 +394,12 @@ int main() {
 		klog << "k_stderr(mean): " << stderr_mean << "\n";
 	
 	}
+
+#ifdef TALLYWHOLECYCLE
+	GPU_Manager::FetchCoreTallyToHost(h_CoreTally, d_bufferTallyAssembly, d_bufferTallyPincellVec);
+	DumpCoreTallyToText(h_CoreTally, fluxTallyLog, activeCycle + inactiveCycle, 10, meanK);
+
+#endif
 
 
 	//std::cout << "\n initial Neutron number: " << num << ", for cycle of " << cycleNum - inactiveCycle << ", average k = " << meanK << "\n";

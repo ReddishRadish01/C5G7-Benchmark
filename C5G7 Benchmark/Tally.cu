@@ -79,5 +79,6 @@ void ResetCoreTallyOnDevice(const TallyC5G7Geometry& h_CoreTally, TallyAssembly*
 		int threads = 256;
 		int blocks = (n + threads - 1) / threads;
 		ZeroTallyPincellsKernel << <blocks, threads >> > (d_bufferTallyPincellVec[i], n);
+		cudaDeviceSynchronize();
 	}
 }
