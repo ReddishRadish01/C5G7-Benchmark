@@ -1,3 +1,13 @@
 # C5G7 Benchmark - Jeongbin Kim
 
+### k-Eigenvalue Plot:
+![k Eigenvalue Plot](Final_Result/k_trend.png)
+
+
+### Flux Tally @ z = 13.86 cm
 ![Flux Tally at z = 13.86 cm](Final_Result/260205_170700/power01_cycle3500_k10.png)
+
+### Some Stats
+![Some stats](Final_Result/Results.png)
+
+
