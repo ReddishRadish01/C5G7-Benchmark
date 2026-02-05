@@ -194,7 +194,7 @@ def plot_cycle_k_power01(
                 (x0, y0),
                 dx,
                 dy,
-                linewidth=0.15,
+                linewidth=0.07,
                 edgecolor="k",
                 facecolor=plt.cm.viridis(mod01),
             )
@@ -207,7 +207,7 @@ def plot_cycle_k_power01(
                     (cx, cy),
                     radius=pin_radius_cm,
                     linewidth=0.1,
-                    alpha=0.7,
+                    alpha=0.5,
                     edgecolor="k",
                     facecolor=plt.cm.viridis(pin01),
                 )
@@ -245,7 +245,7 @@ def plot_cycle_k_power01(
 
 
 if __name__ == "__main__":
-    infile = "flux_Tally20260127_055905.txt"
+    infile = "flux_Tally20260205_165504.txt"
     out_dir = "plots_Total"
     k_slice = 10
 

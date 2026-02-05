@@ -39,10 +39,11 @@ int main() {
 	int threadPerBlock = 32;
 	int blockPerDim = (num + threadPerBlock - 1) / threadPerBlock;
 
+	double referenceK = 1.183810;
 	double h_multK = 0.0;
 	std::cout << "input the initial K muliplication factor:\n";
 	//std::cin >> h_multK;
-	h_multK = 1.00;
+	h_multK = referenceK;
 
 	double* d_multK = nullptr;
 	cudaMalloc(&d_multK, sizeof(double));
@@ -389,10 +390,13 @@ int main() {
 		std::cout << "k_stddev(cycle): " << stddev << "\n";
 		std::cout << "k_stderr(mean): " << stderr_mean << "\n";
 
+		std::cout << "Reactivity(rho): " << (meanK - 1.0) / meanK << ", Per Cent error compared to reference: " <<  (referenceK - 1) / referenceK - (meanK - 1.0) / meanK << "\n";
+
 		klog << "\n\nActive cycles: " << activeCount << "\n";
 		klog << "k_mean: " << meanK << "\n";
 		klog << "k_stddev(cycle): " << stddev << "\n";
 		klog << "k_stderr(mean): " << stderr_mean << "\n";
+		klog << "Reactivity(rho): " << (meanK - 1.0) / meanK << ", Per Cent error compared to reference: " << ((referenceK - 1) / referenceK - (meanK - 1.0) / meanK) * 100 << "\n";
 	
 	}
 
