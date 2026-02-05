@@ -30,7 +30,7 @@ int main() {
 	int num = 500000;
 	int numCycle = 3301;
 	int inactiveCycle = 1500;
-	int activeCycle = 2400;
+	int activeCycle = 2000;
 	numCycle = inactiveCycle + activeCycle + 1;
 	int iterLimit = 1000;
 
@@ -149,7 +149,8 @@ int main() {
 
 	for (int i = 0; i < h_Bank.neutronSize; i++) {
 		vec3 randPos = { h_RNG.uniform(0, h_Core.x), h_RNG.uniform(0, h_Core.y), h_RNG.uniform(0, h_Core.z) };
-		h_Bank.neutrons[i] = Neutron(randPos, vec3::randomUnit(h_RNG), static_cast<double>(h_RNG.int_dist(1, 7)), 1.0);
+		vec3 centerRandPos = { h_RNG.uniform(0, 20), h_RNG.uniform(0, 20) ,h_RNG.uniform(0, 20) };
+		h_Bank.neutrons[i] = Neutron(centerRandPos, vec3::randomUnit(h_RNG), static_cast<double>(h_RNG.int_dist(1, 7)), 1.0);
 		//h_Bank.neutrons[i] = Neutron({ 0.1, 0.1, 0.1 }, { -1.0, 0.0, 0.0 }, static_cast<double>(h_RNG.int_dist(1, 7)), 1.0);
 		//h_Bank.neutrons[i] = Neutron({ 0.63, 0.63, 0.63 }, { 1.0, 0.0, 0.0 }, static_cast<double>(h_RNG.int_dist(1, 7)), 1.0);
 		//h_Bank.neutrons[i] = Neutron(randPos, vec3::randomUnit(h_RNG), 1, 1.0);

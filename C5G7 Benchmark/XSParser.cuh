@@ -137,6 +137,8 @@ struct MatXS {
 
 		}
 
+
+
 		for (int i = 0; i < 7; i++) {
 			for (int j = 0; j < 7; j++) {
 				C5Data >> elsXS[i][j];
@@ -150,12 +152,17 @@ struct MatXS {
 		
 		
 		
+		
 		for (int g = 0; g < 7; g++) {
 			transXS[g] = capXS[g] + fisXS[g];
 			for (int i = 0; i < 7; i++) {
 				transXS[g] += elsXS[g][i];
 			}
 		}
+
+		
+		
+		
 		
 		
 		
