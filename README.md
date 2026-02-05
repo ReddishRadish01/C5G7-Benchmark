@@ -1,5 +1,8 @@
 # C5G7 Benchmark - Jeongbin Kim
 
+Reference 3-D Eignevalue: k = 1.138310
+Mine: k = 1.183801
+
 ### k-Eigenvalue Plot:
 ![k Eigenvalue Plot](Final_Result/260205_170700/k_trend.png)
 
