@@ -225,7 +225,7 @@ def plot_cycle_k_power01(
     sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis, norm=Normalize(vmin=0.0, vmax=1.0))
     sm.set_array([])
     cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label("Power (normalized 0–1, shared for mod+pin)")
+    cbar.set_label("Flux (normalized 0–1, shared for mod+pin)")
 
     if cycle.core_size is not None:
         cx, cy, _ = cycle.core_size
